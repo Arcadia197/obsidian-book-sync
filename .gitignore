@@ -1,0 +1,31 @@
+# editors
+.vscode
+.idea
+*.iml
+
+# npm
+node_modules
+
+# Built bundle: uploaded to GitHub releases, not committed
+main.js
+*.map
+
+# Obsidian settings of a deployed copy
+data.json
+
+.DS_Store
+
+# Local paths (OUTPUT_PATH, vault path for check:vault). Never secrets in this repo
+.env
+
+# test bundles and the throwaway e2e vault
+tests/.build
+tests/e2e/.run
+
+# Personal development files, kept out of commits (AGENTS.md Lessons)
+AGENTS.md
+CLAUDE.md
+PLAN.md
+TODO.md
+HANDOVER.md
+deploy-local.sh

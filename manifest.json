@@ -1,0 +1,10 @@
+{
+  "id": "julius-personal-book-sync",
+  "name": "Book Sync",
+  "version": "0.0.1",
+  "minAppVersion": "1.11.4",
+  "description": "Keeps a Goodreads to-read shelf, a markdown backlog, Hardcover and book notes in step, with a review window before every write.",
+  "author": "Julius Bergmann",
+  "authorUrl": "https://github.com/Arcadia197",
+  "isDesktopOnly": false
+}

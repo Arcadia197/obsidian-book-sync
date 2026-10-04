@@ -1,0 +1,67 @@
+{
+	"name": "obsidian-book-sync",
+	"version": "0.0.1",
+	"description": "Keeps a Goodreads to-read shelf, a markdown backlog, Hardcover and book notes in step, with a review window before every write.",
+	"main": "main.js",
+	"scripts": {
+		"dev": "node esbuild.config.mjs",
+		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+		"test": "node tests/run.mjs",
+		"test:e2e": "npm run build && node tests/e2e/run.mjs",
+		"release": "release-it",
+		"prepare": "husky"
+	},
+	"keywords": [],
+	"author": "Julius Bergmann",
+	"license": "MIT",
+	"type": "module",
+	"devDependencies": {
+		"@commitlint/cli": "^17.6.5",
+		"@commitlint/config-conventional": "^17.6.5",
+		"@release-it/conventional-changelog": "^5.1.1",
+		"@types/node": "^20.11.0",
+		"builtin-modules": "3.3.0",
+		"dotenv": "^16.3.1",
+		"esbuild": "^0.18.0",
+		"husky": "^9.1.7",
+		"obsidian": "1.11.4",
+		"release-it": "^15.11.0",
+		"tslib": "2.4.0",
+		"typescript": "^5.7.2"
+	},
+	"release-it": {
+		"hooks": {
+			"before:init": "npm test",
+			"before:release": "npm run build",
+			"after:bump": "node verify-and-update.mjs"
+		},
+		"git": {
+			"commitMessage": "chore: release v${version}",
+			"tagName": "${version}"
+		},
+		"github": {
+			"release": false
+		},
+		"npm": {
+			"publish": false
+		},
+		"plugins": {
+			"@release-it/conventional-changelog": {
+				"infile": "CHANGELOG.md",
+				"preset": {
+					"name": "conventionalcommits",
+					"types": [
+						{
+							"type": "feat",
+							"section": "Features"
+						},
+						{
+							"type": "fix",
+							"section": "Bug Fixes"
+						}
+					]
+				}
+			}
+		}
+	}
+}

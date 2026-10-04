@@ -1,0 +1,63 @@
+name: Release Obsidian plugin
+
+# `npm run release` (release-it) bumps the version, writes CHANGELOG.md, commits, tags and pushes.
+# The pushed tag (no "v" prefix, it must equal the manifest version) triggers this workflow,
+# which publishes the GitHub release. Published, not draft: BRAT can't see draft releases.
+on:
+    push:
+        tags:
+            # Version tags only (0.3.0, 1.0.0-beta.1), they must equal the manifest version
+            - "[0-9]+.[0-9]+.[0-9]+*"
+
+jobs:
+    release:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Use Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+                  cache: npm
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Build plugin
+              run: npm run build
+
+            - name: Run unit tests
+              run: npm test
+
+            - name: Create release
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  tag="${GITHUB_REF#refs/tags/}"
+
+                  # Release notes: this version's section of CHANGELOG.md. Version headings look like
+                  # "## 1.2.0 (date)", "## [1.2.0](compare-url) (date)" or "### [1.2.1](...)" for patches.
+                  # Falls back to GitHub's generated notes when the section is missing.
+                  awk -v tag="$tag" '
+                    /^###? \[?[0-9]+\.[0-9]+\.[0-9]+/ {
+                      if (found) exit
+                      line = $0
+                      sub(/^###? \[?/, "", line)
+                      if (index(line, tag "]") == 1 || index(line, tag " ") == 1 || line == tag) { found = 1; next }
+                    }
+                    found { print }
+                  ' CHANGELOG.md > release-notes.md
+
+                  if grep -q '[^[:space:]]' release-notes.md; then
+                    notes=(--notes-file release-notes.md)
+                  else
+                    notes=(--generate-notes)
+                  fi
+
+                  gh release create "$tag" \
+                    --title="$tag" \
+                    "${notes[@]}" \
+                    main.js manifest.json styles.css
