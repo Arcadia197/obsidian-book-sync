@@ -1,5 +1,5 @@
 // Synthetic Books folder and stub clients for the step tests. All names and ids are made up.
-import type { PlanContext } from "../src/steps/context";
+import type { ApplyContext, PlanContext } from "../src/steps/context";
 import { DEFAULT_SETTINGS, BookSyncSettings } from "../src/settings";
 import { renderRow } from "../src/core/table";
 import { goodreadsLink, hardcoverLink } from "../src/core/idLinks";
@@ -100,7 +100,7 @@ export function context(vault: MemoryVault, overrides: {
 	goodreads?: Partial<PlanContext["goodreads"]>;
 	openai?: Partial<PlanContext["openai"]>;
 	settings?: Partial<BookSyncSettings>;
-} = {}): PlanContext {
+} = {}): PlanContext & ApplyContext & { vault: MemoryVault } {
 	return {
 		vault,
 		settings: { ...SETTINGS, ...overrides.settings },
