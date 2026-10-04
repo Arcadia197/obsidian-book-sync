@@ -53,6 +53,7 @@ export class BookSyncView extends ItemView {
 	}
 
 	async onOpen(): Promise<void> {
+		this.registerDomEvent(window, "resize", () => this.fitFooter());
 		this.render();
 		this.checkTodos();
 	}
@@ -77,7 +78,6 @@ export class BookSyncView extends ItemView {
 		const root = this.contentEl;
 		root.empty();
 		root.addClass("book-sync-view");
-		root.toggleClass("is-phone", Platform.isPhone);
 		this.railEl = root.createDiv({ cls: "book-sync-rail" });
 		this.bodyEl = root.createDiv({ cls: "book-sync-body" });
 		this.footEl = root.createDiv({ cls: "book-sync-foot" });
@@ -174,11 +174,47 @@ export class BookSyncView extends ItemView {
 			this.renderStep(session, session.current!);
 		}
 		this.bodyEl.scrollTop = scroll;
+		this.contentEl.toggleClass("is-phone", Platform.isPhone);
+		this.fitFooter();
 		this.updateStatus();
 		if (focusId) {
 			const field = this.bodyEl.querySelector<HTMLInputElement>(`[data-focus-id="${CSS.escape(focusId)}"]`);
 			field?.focus();
 			field?.setSelectionRange(field.value.length, field.value.length);
+		}
+	}
+
+	/**
+	 * Keeps the footer's buttons clear of what Obsidian floats over the bottom of the window: the status bar on
+	 * desktop, the navigation bar on phones
+	 */
+	private fitFooter(): void {
+		// Phones: the view header floats over the top of the view
+		this.railEl.style.marginTop = "";
+		const header = this.containerEl.querySelector<HTMLElement>(".view-header");
+		if (Platform.isMobile && header) {
+			const covered = header.getBoundingClientRect().bottom - this.railEl.getBoundingClientRect().top;
+			if (header.getBoundingClientRect().height > 0 && covered > 0) {
+				this.railEl.style.marginTop = `${covered}px`;
+			}
+		}
+		this.footEl.style.paddingBottom = "";
+		if (!this.footEl.hasChildNodes()) {
+			return;
+		}
+		const foot = this.footEl.getBoundingClientRect();
+		let overlap = 0;
+		for (const el of Array.from(document.querySelectorAll<HTMLElement>(".status-bar, .mobile-navbar"))) {
+			const bar = el.getBoundingClientRect();
+			const visible = bar.height > 0 && getComputedStyle(el).display !== "none";
+			const overlaps = bar.left < foot.right && bar.right > foot.left && bar.top < foot.bottom && bar.bottom > foot.top;
+			if (visible && overlaps) {
+				overlap = Math.max(overlap, foot.bottom - bar.top);
+			}
+		}
+		if (overlap > 0) {
+			const base = parseFloat(getComputedStyle(this.footEl).paddingBottom) || 0;
+			this.footEl.style.paddingBottom = `${base + overlap + 4}px`;
 		}
 	}
 

@@ -8,8 +8,16 @@
 	--bs-ok-soft: rgba(var(--color-green-rgb), 0.12);
 	display: flex;
 	flex-direction: column;
-	padding: 0 !important;
 	overflow: hidden;
+}
+
+/* The view lays out its own spacing; on phones the view measures Obsidian's floating header and keeps clear of it */
+body:not(.is-mobile) .book-sync-view {
+	padding: 0 !important;
+}
+
+.is-mobile .book-sync-view {
+	padding: 0 !important;
 }
 
 .book-sync-rail,
@@ -60,7 +68,7 @@
 }
 
 /* Start page */
-.book-sync-full {
+.book-sync-view button.book-sync-full {
 	display: flex;
 	align-items: center;
 	gap: var(--size-4-3);
@@ -73,7 +81,7 @@
 	color: var(--text-on-accent);
 }
 
-.book-sync-full:hover {
+.book-sync-view button.book-sync-full:hover {
 	background: var(--interactive-accent-hover);
 }
 
@@ -458,7 +466,7 @@
 }
 
 .book-sync-group.is-hardcover svg,
-.book-sync-group.is-hardcover .book-sync-link-button {
+.book-sync-view .book-sync-group.is-hardcover button.book-sync-link-button {
 	color: var(--bs-hardcover);
 }
 
@@ -467,11 +475,11 @@
 	font-weight: normal;
 }
 
-.book-sync-group .book-sync-link-button {
+.book-sync-group button.book-sync-link-button {
 	margin-left: auto;
 }
 
-.book-sync-link-button {
+.book-sync-view button.book-sync-link-button {
 	background: none !important;
 	box-shadow: none !important;
 	border: 0;
@@ -839,7 +847,7 @@
 	height: 30px;
 }
 
-.book-sync-view.is-phone .book-sync-link-button,
+.book-sync-view.is-phone button.book-sync-link-button,
 .book-sync-view.is-phone .book-sync-suggestions button {
 	padding: var(--size-4-2) var(--size-4-3);
 }
@@ -863,4 +871,9 @@
 
 .book-sync-key-status.is-error {
 	color: var(--text-error);
+}
+
+/* Phones without a footer (start page, summary): room to scroll the last item above the floating navigation bar */
+.is-mobile .book-sync-body:has(+ .book-sync-foot:empty) {
+	padding-bottom: calc(var(--size-4-8) + 80px);
 }
