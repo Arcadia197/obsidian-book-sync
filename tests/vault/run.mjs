@@ -10,14 +10,18 @@ if (!process.env.BOOKS_DIR) {
 	console.error("Set BOOKS_DIR in .env to the vault's Books folder (see .env.example).");
 	process.exit(1);
 }
-const outFile = path.join("tests", ".build", "checkVault.mjs");
+// `node tests/vault/run.mjs [checkVault|parity]`
+const name = process.argv[2] ?? "checkVault";
+const outFile = path.join("tests", ".build", `${name}.mjs`);
 await esbuild.build({
-	entryPoints: [path.join("tests", "vault", "checkVault.ts")],
+	entryPoints: [path.join("tests", "vault", `${name}.ts`)],
 	bundle: true,
 	platform: "node",
 	format: "esm",
 	target: "node18",
 	outfile: outFile,
+	// npm packages (dotenv) stay imports: bundled CommonJS can't require Node built-ins from ESM
+	packages: "external",
 	logLevel: "warning",
 });
 const result = spawnSync(process.execPath, [outFile], { stdio: "inherit", env: process.env });
