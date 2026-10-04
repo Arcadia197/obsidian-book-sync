@@ -267,7 +267,7 @@ export async function applyPull(ctx: ApplyContext, changes: Change<PullPayload>[
 			const payload = change.payload;
 			if (payload.kind === "add") {
 				const { entry } = payload;
-				if (findRow(table, { goodreadsId: entry.goodreadsId, line: null })) {
+				if (table.rows.some((row) => rowGoodreadsId(row) === entry.goodreadsId)) {
 					result.skipped.push({ id: change.id, reason: "already in the table" });
 					continue;
 				}

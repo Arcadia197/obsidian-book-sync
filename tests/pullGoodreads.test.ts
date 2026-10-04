@@ -153,3 +153,14 @@ test("vocabularyLabels: vocabulary spelling, duplicates dropped, empty vocabular
 	assert.deepEqual(vocabularyLabels("anything", []), { kept: ["anything"], dropped: [] });
 	assert.equal(SETTINGS.booksFolder, "Books");
 });
+
+test("regression: two rows with the same goodreads_id are both kept (the Python's dict dropped one), only the first updated", async () => {
+	const twin = row({ title: "Twin", author: "Twi", date: "2026-01-01", gr: "10", notes: "typo id" });
+	const vault = setup([EXISTING, twin]);
+	const ctx = context(vault, { goodreads: { fetchShelf: async () => [FEED[1]] } });
+	const plan = await planPull(ctx, { labelSuggestions: false });
+	assert.ok(plan.notes.some((n) => n.includes("Two rows have goodreads_id 10")));
+	await applyPull(ctx, selectedChanges(plan));
+	const rows = parseTable(vault.files.get(BACKLOG)!, "Title")!.rows;
+	assert.deepEqual(rows.map((r) => [r.cells.Title, r.cells.DateAdded]), [["Known", "2026-03-05"], ["Twin", "2026-01-01"]]);
+});

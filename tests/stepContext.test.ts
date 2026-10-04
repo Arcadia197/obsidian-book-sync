@@ -3,6 +3,7 @@ import { strict as assert } from "node:assert";
 import { findRow, loadBacklog, loadNotes, paths, rowGoodreadsId, rowKey } from "../src/steps/context";
 import { parseTable, setCell } from "../src/core/table";
 import { selectedChanges } from "../src/core/changes";
+import { removeRows } from "../src/steps/reconcile";
 import { MemoryVault } from "./memoryVault";
 import { BACKLOG, backlogFile, DB, noteText, notePath, row, SETTINGS } from "./stepFixtures";
 
@@ -39,6 +40,19 @@ test("findRow: an unkeyed row edited by hand since the plan is not found (never 
 	const key = rowKey(planned.rows[1]);
 	const edited = parseTable(backlogFile([ROWS[0], row({ title: "Hand Added", author: "Hal", date: "2026-01-16" })]), "Title")!;
 	assert.equal(findRow(edited, key), null);
+});
+
+test("regression: two rows with the same goodreads_id are told apart by their line, never by order", async () => {
+	const first = row({ title: "Real Book", author: "Rea", date: "2026-02-01", gr: "1" });
+	const twin = row({ title: "Typo Twin", author: "Twi", date: "2026-01-01", gr: "1", hc: [5, "five"] });
+	const planned = parseTable(backlogFile([first, twin]), "Title")!;
+	const key = rowKey(planned.rows[1]);
+	assert.equal(findRow(planned, key)?.cells.Title, "Typo Twin");
+	const edited = parseTable(backlogFile([first, row({ title: "Typo Twin", author: "Twi", date: "2026-01-02", gr: "1" })]), "Title")!;
+	assert.equal(findRow(edited, key), null, "ambiguous and the planned line is gone: skip");
+	const vault = new MemoryVault({ [BACKLOG]: backlogFile([first, twin]) });
+	await removeRows(vault, SETTINGS, [key]);
+	assert.deepEqual(parseTable(vault.files.get(BACKLOG)!, "Title")!.rows.map((r) => r.original), [first]);
 });
 
 test("loadBacklog: clear errors for a missing file or table", async () => {

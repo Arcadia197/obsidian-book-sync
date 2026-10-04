@@ -119,11 +119,17 @@ export function rowKey(row: TableRow): RowKey {
 	return { goodreadsId: rowGoodreadsId(row), line: row.original };
 }
 
+/**
+ * The row a key points at, or null. By Goodreads id when it has one; when several rows share that id, only the one
+ * whose line is unchanged since the plan counts (never a guess: the wrong row would be edited or removed)
+ */
 export function findRow(table: Table, key: RowKey): TableRow | null {
+	const byLine = (rows: TableRow[]) => (key.line === null ? null : rows.find((row) => row.original === key.line) ?? null);
 	if (key.goodreadsId) {
-		return table.rows.find((row) => rowGoodreadsId(row) === key.goodreadsId) ?? null;
+		const matches = table.rows.filter((row) => rowGoodreadsId(row) === key.goodreadsId);
+		return matches.length === 1 ? matches[0] : byLine(matches);
 	}
-	return key.line === null ? null : table.rows.find((row) => row.original === key.line) ?? null;
+	return byLine(table.rows);
 }
 
 /** "Title (Author)" for messages */
