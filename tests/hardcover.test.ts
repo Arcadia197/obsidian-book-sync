@@ -170,3 +170,9 @@ test("reader and writer share one pacer", async () => {
 	await writer.addListBook(1, 2);
 	assert.deepEqual(clock.sleeps, [1100]);
 });
+
+test("whoAmI: the username behind the token, for the settings' Test button", async () => {
+	const { reader, body } = setup({ status: 200, text: JSON.stringify({ data: { me: [{ username: "reader1" }] } }), headers: {} });
+	assert.equal(await reader.whoAmI(), "reader1");
+	assert.match(body(0).query, /me \{ username \}/);
+});

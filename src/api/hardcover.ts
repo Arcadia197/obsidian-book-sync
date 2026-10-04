@@ -176,6 +176,12 @@ export class HardcoverReader {
 		return data.me[0];
 	}
 
+	/** The username behind the token (the settings' Test button) */
+	async whoAmI(): Promise<string> {
+		const me = await this.me<{ username: string }>(`query WhoAmI { me { username } }`);
+		return me.username;
+	}
+
 	/**
 	 * The book an isbn belongs to, tried as isbn_10 and isbn_13 (Goodreads doesn't say which it gave us). Only a
 	 * single distinct book counts as a match: a wrong id is worse than a missing one. Port of link_hardcover_ids.py

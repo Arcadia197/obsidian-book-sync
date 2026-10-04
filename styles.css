@@ -851,3 +851,16 @@
 .book-sync-view.is-phone .book-sync-end {
 	margin-left: 0;
 }
+
+/* Settings: result of a key's Test button */
+.book-sync-key-status {
+	margin-top: var(--size-4-1);
+}
+
+.book-sync-key-status.is-ok {
+	color: var(--color-green);
+}
+
+.book-sync-key-status.is-error {
+	color: var(--text-error);
+}

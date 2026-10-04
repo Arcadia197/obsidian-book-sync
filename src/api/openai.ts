@@ -5,6 +5,7 @@
 import { ApiError, HttpFn, snippet, withTimeout } from "./http";
 
 export const OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions";
+export const OPENAI_MODELS_URL = "https://api.openai.com/v1/models";
 // propose_labels.py waits 60s
 const TIMEOUT_MS = 60_000;
 /** Example titles per label in the prompt */
@@ -27,6 +28,8 @@ export interface OpenAiOptions {
 	model: string;
 	http: HttpFn;
 	url?: string;
+	/** For the settings' key test */
+	modelsUrl?: string;
 	timeoutMs?: number;
 }
 
@@ -113,6 +116,33 @@ export function restrictToVocabulary(content: unknown, vocabulary: Vocabulary): 
 
 export class OpenAiClient {
 	constructor(private readonly options: OpenAiOptions) {}
+
+	/** The settings' Test button: lists the models (free, no tokens used). Resolves when the key works and knows the model */
+	async checkKey(): Promise<string> {
+		if (!this.options.apiKey) {
+			throw new ApiError("No OpenAI API key set.");
+		}
+		const response = await withTimeout(
+			this.options.http({ url: this.options.modelsUrl ?? OPENAI_MODELS_URL, method: "GET", headers: { Authorization: `Bearer ${this.options.apiKey}` } }),
+			this.options.timeoutMs ?? TIMEOUT_MS,
+			"OpenAI",
+		);
+		if (response.status === 401) {
+			throw new ApiError("OpenAI rejected the API key.", 401);
+		}
+		if (response.status < 200 || response.status >= 300) {
+			throw new ApiError(`OpenAI answered HTTP ${response.status}.`, response.status);
+		}
+		let ids: string[] = [];
+		try {
+			ids = (JSON.parse(response.text).data ?? []).map((m: { id?: unknown }) => String(m.id));
+		} catch {
+			// The key works; the list is only for the model check
+		}
+		return ids.length && !ids.includes(this.options.model)
+			? `The key works, but this account has no model "${this.options.model}".`
+			: "The key works.";
+	}
 
 	/** One chat completion that must answer a JSON object. Throws ApiError; callers fall back to blank Labels */
 	async chatJson(systemPrompt: string, userPayload: unknown): Promise<unknown> {

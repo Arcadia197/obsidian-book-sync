@@ -126,3 +126,14 @@ test("createClients: keys and model from the settings, endpoints overridable, th
 	assert.equal(fake.requests[2].headers?.Authorization, "Bearer oa");
 	assert.equal(fake.body(2).model, "model-x");
 });
+
+test("checkKey: the model list says the key works and whether the model exists; a rejected key is a clear error", async () => {
+	const { http, requests } = fakeHttp(jsonResponse({ data: [{ id: "gpt-6-sol" }] }), jsonResponse({ data: [{ id: "other" }] }), jsonResponse({ error: {} }, 401));
+	const client = new OpenAiClient({ apiKey: KEY, model: "gpt-6-sol", http });
+	assert.equal(await client.checkKey(), "The key works.");
+	assert.equal(requests[0].url, "https://api.openai.com/v1/models");
+	assert.equal(requests[0].headers?.Authorization, `Bearer ${KEY}`);
+	assert.match(await client.checkKey(), /no model "gpt-6-sol"/);
+	await assert.rejects(client.checkKey(), /rejected the API key/);
+	await assert.rejects(new OpenAiClient({ apiKey: "", model: "m", http }).checkKey(), /No OpenAI API key/);
+});

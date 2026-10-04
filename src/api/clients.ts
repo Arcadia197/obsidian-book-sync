@@ -12,6 +12,8 @@ export interface Endpoints {
 	openai?: string;
 	/** Base of Goodreads book pages, e.g. "https://www.goodreads.com" */
 	goodreads?: string;
+	/** OpenAI's model list, for the key test */
+	openaiModels?: string;
 	/** Hardcover pacing per request, only for the e2e test's fake server (the real API needs the default 1.1s) */
 	hardcoverIntervalMs?: number;
 }
@@ -42,6 +44,6 @@ export function createClients(settings: BookSyncSettings, http: HttpFn, endpoint
 			clock,
 			bookUrl: goodreadsBase ? (id) => `${goodreadsBase}/book/show/${id}` : undefined,
 		}),
-		openai: new OpenAiClient({ apiKey: settings.openaiKey, model: settings.openaiModel, http, url: endpoints.openai }),
+		openai: new OpenAiClient({ apiKey: settings.openaiKey, model: settings.openaiModel, http, url: endpoints.openai, modelsUrl: endpoints.openaiModels }),
 	};
 }

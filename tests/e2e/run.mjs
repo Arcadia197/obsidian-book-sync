@@ -152,6 +152,9 @@ try {
 		if (method === "GET" && path.startsWith("/book/show/")) {
 			return { status: 200, headers: { "Content-Type": "text/html" }, body: fixture("goodreads-book.html") };
 		}
+		if (method === "GET" && path === "/models") {
+			return { status: 200, body: { data: [{ id: "gpt-6-sol" }, { id: "gpt-6-luna" }] } };
+		}
 		if (method === "POST" && path === "/chat") {
 			return queue.openai.shift() ?? { status: 500, body: "no answer queued" };
 		}
@@ -222,7 +225,7 @@ try {
 
 	// --- API clients through Obsidian's requestUrl, against the local fake servers
 	// 20ms pacing instead of Hardcover's 1.1s per request: the fake server has no rate limit, and the run stays short
-	const endpoints = JSON.stringify({ hardcover: `${fake.url}/graphql`, goodreads: fake.url, openai: `${fake.url}/chat`, hardcoverIntervalMs: 20 });
+	const endpoints = JSON.stringify({ hardcover: `${fake.url}/graphql`, goodreads: fake.url, openai: `${fake.url}/chat`, openaiModels: `${fake.url}/models`, hardcoverIntervalMs: 20 });
 	const sent = () => fake.requests.length;
 
 	queue.hardcover.push("merges");
@@ -564,6 +567,44 @@ try {
 	await cdp.eval(`await app.vault.adapter.write(${JSON.stringify(DONE_NOTE)}, "---\\nmedium: paper\\n---\\n"); await plugin.checkTodos();`);
 	check("left for you: an item ticks itself off once the field is filled; an offline remote check keeps its items",
 		stillOpen && !todoKeys().includes("fields:fill-me") && todoKeys().includes("edition:8001"), JSON.stringify(todoKeys()));
+
+	// --- Settings (step 6): model dropdown with Custom, and a Test button per key against the fake servers
+	hardcoverScenario = (request) => request.query.includes("WhoAmI")
+		? { status: 200, body: { data: { me: [{ username: "e2e-reader" }] } } }
+		: uiHardcover(request);
+	const settingsUi = await cdp.eval(`
+		const tab = app.setting.pluginTabs.find((t) => t.id === ${JSON.stringify(PLUGIN_ID)});
+		tab.display();
+		const item = (name) => [...tab.containerEl.querySelectorAll(".setting-item")].find((el) => el.querySelector(".setting-item-name")?.textContent === name);
+		const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+		const model = item("OpenAI model");
+		const select = model.querySelector("select"), custom = model.querySelector("input");
+		const options = [...select.options].map((o) => o.value);
+		select.value = "gpt-6-luna"; select.dispatchEvent(new Event("change")); await pause(200);
+		const picked = plugin.settings.openaiModel;
+		select.value = "__custom__"; select.dispatchEvent(new Event("change"));
+		const customShown = custom.style.display !== "none";
+		custom.value = "my-fine-tune"; custom.dispatchEvent(new Event("input")); await pause(200);
+		const typed = plugin.settings.openaiModel;
+		tab.display();
+		const reopened = item("OpenAI model").querySelector("select").value;
+		plugin.settings.openaiModel = "gpt-6-sol"; await plugin.saveSettings();
+		const results = {};
+		for (const name of ["Hardcover API token", "OpenAI API key", "Goodreads RSS URL"]) {
+			item(name).querySelector("button").click();
+			await pause(800);
+			results[name] = item(name).querySelector(".book-sync-key-status").textContent;
+		}
+		return { options, picked, customShown, typed, reopened, results };`);
+	check("settings: the model dropdown saves a listed model, Custom takes any id, and a saved custom id shows as Custom",
+		settingsUi.options.join() === "gpt-6-luna,gpt-6-sol,gpt-6.1-sol,gpt-6-astra,__custom__" && settingsUi.picked === "gpt-6-luna"
+			&& settingsUi.customShown && settingsUi.typed === "my-fine-tune" && settingsUi.reopened === "__custom__",
+		JSON.stringify(settingsUi));
+	check("settings: each key's Test button reports whether it works",
+		settingsUi.results["Hardcover API token"] === "The token works: signed in as e2e-reader."
+			&& settingsUi.results["OpenAI API key"] === "The key works."
+			&& settingsUi.results["Goodreads RSS URL"] === "The feed works: 4 books on the shelf.",
+		JSON.stringify(settingsUi.results));
 } catch (err) {
 	check("e2e run finished without an exception", false, err.stack ?? String(err));
 } finally {
