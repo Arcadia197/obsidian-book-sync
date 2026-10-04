@@ -1,9 +1,9 @@
-import { App, PluginSettingTab, SecretComponent, Setting } from "obsidian";
+import { App, PluginSettingTab, Setting } from "obsidian";
 import type BookSyncPlugin from "../../main";
 import { DEFAULT_SETTINGS } from "../settings";
 
 type TextKey = "booksFolder" | "wantToReadFile" | "hardcoverListsFile" | "databaseFolder" | "ownerName" | "openaiModel";
-type SecretKey = "hardcoverTokenSecret" | "openaiKeySecret" | "goodreadsRssSecret";
+type KeySetting = "hardcoverToken" | "openaiKey" | "goodreadsRssUrl";
 
 export class SettingsTab extends PluginSettingTab {
 	constructor(app: App, private plugin: BookSyncPlugin) {
@@ -25,12 +25,12 @@ export class SettingsTab extends PluginSettingTab {
 		this.text("openaiModel", "OpenAI model", "Model for label suggestions.");
 
 		new Setting(containerEl)
-			.setName("Secrets")
-			.setDesc("Stored in Obsidian's secret storage on this device, not in the vault or the plugin's data.json.")
+			.setName("Keys")
+			.setDesc("Saved in the plugin's data.json inside the vault, so they sync to your other devices along with the vault.")
 			.setHeading();
-		this.secret("hardcoverTokenSecret", "Hardcover API token", "From hardcover.app, Settings, API.");
-		this.secret("openaiKeySecret", "OpenAI API key", "For label suggestions.");
-		this.secret("goodreadsRssSecret", "Goodreads RSS URL", "The to-read shelf's RSS link. It contains a private key.");
+		this.key("hardcoverToken", "Hardcover API token", "From hardcover.app, Settings, API.");
+		this.key("openaiKey", "OpenAI API key", "For label suggestions.");
+		this.key("goodreadsRssUrl", "Goodreads RSS URL", "The to-read shelf's RSS link. It contains a private key.");
 	}
 
 	private text(key: TextKey, name: string, desc: string): void {
@@ -48,15 +48,17 @@ export class SettingsTab extends PluginSettingTab {
 			);
 	}
 
-	private secret(key: SecretKey, name: string, desc: string): void {
+	/** A masked text field */
+	private key(key: KeySetting, name: string, desc: string): void {
 		new Setting(this.containerEl)
 			.setName(name)
 			.setDesc(desc)
-			.addComponent((el) =>
-				new SecretComponent(this.app, el).setValue(this.plugin.settings[key]).onChange(async (value) => {
-					this.plugin.settings[key] = value;
+			.addText((text) => {
+				text.inputEl.type = "password";
+				text.setValue(this.plugin.settings[key]).onChange(async (value) => {
+					this.plugin.settings[key] = value.trim();
 					await this.plugin.saveSettings();
-				})
-			);
+				});
+			});
 	}
 }
