@@ -3,7 +3,7 @@
 // (E2E_VISIBLE=1 keeps it on screen). Your own Obsidian and vaults are not touched.
 import { readFileSync } from "fs";
 import { startFakeServer } from "./fakeServer.mjs";
-import { closeObsidian, createVault, launchObsidian, PLUGIN_ID, readVaultFile, vaultFileExists } from "./lib.mjs";
+import { closeObsidian, createVault, launchObsidian, PLUGIN_ID, readVaultFile, sleep, vaultFileExists } from "./lib.mjs";
 
 const results = [];
 function check(name, ok, detail = "") {
@@ -407,6 +407,104 @@ try {
 			&& readVaultFile(LISTS_PATH).includes("| Sci-Fi | [7101](https://hardcover.app/lists/sci-fi) |\n| Poetry | [7201](https://hardcover.app/lists/poetry) |\n\nText below.")
 			&& relinked.applied.join() === "list:poetry,push:sci-fi:8002,push:poetry:8003",
 		JSON.stringify({ link: link?.summary, mutations: mutations(), relinked }) + "\n" + readVaultFile(LISTS_PATH));
+
+	// --- Review window (step 6): driven through its DOM, the way a user would
+	const UI = `const view = app.workspace.getLeavesOfType("julius-personal-book-sync-view")[0]?.view;
+		const root = view?.contentEl;
+		const button = (text) => [...(root?.querySelectorAll("button") ?? [])].find((b) => b.textContent.trim().startsWith(text));
+		const card = (id) => root?.querySelector(\`[data-change-id="\${id}"]\`);
+		const pause = (ms) => new Promise((r) => setTimeout(r, ms));`;
+	const ui = (body) => cdp.eval(`${UI} ${body}`);
+	// On a timeout, the error says what the view showed instead
+	const waitUi = (expr, timeout) => cdp.waitFor(`(() => { ${UI} return ${expr}; })()`, timeout).catch(async (err) => {
+		const shown = await ui(`const leaf = app.workspace.getLeavesOfType("julius-personal-book-sync-view")[0];
+			return leaf ? "[view " + leaf.view?.getViewType?.() + ", " + (root?.innerHTML.length ?? 0) + " chars] " + (root?.textContent.slice(0, 1500) ?? "") : "(no Book Sync view)";`).catch(() => "?");
+		throw new Error(`${err.message.split("\n")[0]}\n    Waiting for: ${expr}\n    The view showed:\n${shown}`);
+	});
+	// A double click: two clicks in the same moment (CDP mouse input doesn't reach the hidden window). The session's own
+	// guard against a second apply is unit-tested (tests/session.test.ts)
+	const doubleClick = (text) => ui(`const b = button(${JSON.stringify(text)});
+		b.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 }));
+		b.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 2 }));`);
+	const uiHold = { promise: null, release: null };
+	const holdHardcover = () => (uiHold.promise = new Promise((resolve) => (uiHold.release = resolve)));
+	function uiHardcover(request) {
+		if (request.query.includes("GetBookBySlug")) {
+			return { status: 200, body: { data: { books: request.variables.slug === "the-fourth" ? [{ id: 5004, title: "The Fourth Book" }] : [] } } };
+		}
+		return stepsHardcover(request);
+	}
+	hardcoverScenario = (request) => (uiHold.promise ? uiHold.promise.then(() => uiHardcover(request)) : uiHardcover(request));
+	hardcoverMutations.length = 0;
+	await cdp.eval(`await app.vault.adapter.write(${JSON.stringify(BACKLOG_PATH)}, ${JSON.stringify(BACKLOG)});
+		plugin.endpoints = ${endpoints};
+		window.__plans = 0; window.__applies = 0;
+		const planStep = plugin.planStep.bind(plugin), applyStep = plugin.applyStep.bind(plugin);
+		plugin.planStep = (...args) => { window.__plans++; return planStep(...args); };
+		plugin.applyStep = (...args) => { window.__applies++; return applyStep(...args); };`);
+	queue.openai.push({ status: 200, body: { choices: [{ message: { content: JSON.stringify({ "1000002": ["Sci-Fi"], "1000003": [], "1000004": [] }) } }] } });
+	await cdp.eval(`app.commands.executeCommandById("${PLUGIN_ID}:sync-backlog");`);
+	await waitUi(`root?.querySelectorAll(".book-sync-card").length === 4`);
+	const review = await ui(`return {
+		cards: [...root.querySelectorAll(".book-sync-card")].map((c) => c.dataset.changeId + ":" + c.querySelector(".book-sync-tick").checked),
+		chips: [...card("add:1000002").querySelectorAll(".book-sync-chip")].map((c) => c.textContent),
+		steps: root.querySelectorAll(".book-sync-step").length,
+		status: document.querySelector(".book-sync-status")?.textContent };`);
+	check("view: Sync backlog opens the tab on the pull plan (3 steps), local changes ticked, label chips, nothing written yet",
+		review.cards.join() === "update:1000001:true,add:1000002:true,add:1000003:true,add:1000004:true" && review.chips.join() === "Sci-Fi"
+			&& review.steps === 3 && /Pull waits for you \(1\/3\)/.test(review.status) && backlog() === BACKLOG,
+		JSON.stringify(review));
+
+	const none = await ui(`button("Untick all").click(); await pause(50);
+		const apply = button("Nothing ticked"); apply?.click(); await pause(300);
+		return { disabled: apply?.disabled, ticked: root.querySelectorAll(".book-sync-card.is-selected").length, applies: window.__applies };`);
+	check("view: with nothing ticked, Apply is disabled and pressing it writes nothing",
+		none.disabled === true && none.ticked === 0 && none.applies === 0 && backlog() === BACKLOG, JSON.stringify(none));
+
+	await ui(`card("add:1000004").querySelector(".book-sync-summary").click(); await pause(50);`);
+	await doubleClick("Apply 1");
+	await waitUi(`button("Next:")`);
+	const one = await ui(`return { applies: window.__applies, result: card("add:1000004").querySelector(".book-sync-result")?.textContent,
+		other: card("add:1000002").querySelector(".book-sync-result")?.textContent };`);
+	check("view: tapping a card ticks it; a double click on Apply writes that one row once, the rest stays as it was",
+		one.applies === 1 && one.result === "Written" && one.other === "Not ticked, left as is"
+			&& backlog().split("\n").filter((l) => l.includes("[1000004](")).length === 1 && !rowOf(1000002) && !rowOf(1000003)
+			&& rowOf(1000001).startsWith("|  | Ann Author |"),
+		JSON.stringify(one) + "\n" + backlog());
+
+	await ui(`button("Next:").click();`);
+	await waitUi(`card("link:1000004")?.querySelector("[data-focus-id]")`);
+	const waiting = await ui(`return { ticked: card("link:1000004").querySelector(".book-sync-tick").checked, apply: button("Nothing ticked")?.disabled };`);
+	await ui(`const field = card("link:1000004").querySelector("[data-focus-id]");
+		field.value = "https://hardcover.app/books/the-fourth"; field.dispatchEvent(new Event("input"));`);
+	await waitUi(`card("link:1000004")?.classList.contains("is-selected")`);
+	const pasted = await ui(`return card("link:1000004").querySelector(".book-sync-lookup").textContent;`);
+	await ui(`button("Apply 1").click();`);
+	await waitUi(`button("Next:")`);
+	check("view: a pasted Hardcover link is looked up, ticks its card, and Apply writes the id",
+		waiting.ticked === false && waiting.apply === true && /The Fourth Book/.test(pasted)
+			&& rowOf(1000004).endsWith("| [5004](https://hardcover.app/books/the-fourth) |"),
+		JSON.stringify({ waiting, pasted }) + "\n" + rowOf(1000004));
+
+	const beforeClose = backlog();
+	holdHardcover();
+	await ui(`button("Next:").click();`);
+	await waitUi(`root?.querySelector(".book-sync-loading")`);
+	await ui(`view.leaf.detach();`);
+	uiHold.release();
+	uiHold.promise = null;
+	await sleep(1500);
+	const closed = await cdp.eval(`return { leaves: app.workspace.getLeavesOfType("julius-personal-book-sync-view").length, plans: window.__plans,
+		applies: window.__applies, status: document.querySelector(".book-sync-status")?.textContent };`);
+	check("view: closing the tab while a step plans ends the run: nothing more planned or written",
+		closed.leaves === 0 && closed.plans === 3 && closed.applies === 2 && closed.status === "" && backlog() === beforeClose
+			&& hardcoverMutations.length === 0,
+		JSON.stringify(closed));
+
+	await cdp.eval(`app.commands.executeCommandById("${PLUGIN_ID}:open");`);
+	await waitUi(`root?.querySelector(".book-sync-full")`);
+	check("view: opened again, it shows the start page, not the ended run",
+		await ui(`return !root.querySelector(".book-sync-card") && root.querySelectorAll(".book-sync-phase").length === 3;`));
 } catch (err) {
 	check("e2e run finished without an exception", false, err.stack ?? String(err));
 } finally {

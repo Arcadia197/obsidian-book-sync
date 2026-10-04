@@ -3,7 +3,7 @@
 import http from "http";
 
 /**
- * `respond({ method, path, headers, body })` -> `{ status, headers?, body }` (body: string, or anything JSON).
+ * `respond({ method, path, headers, body })` -> `{ status, headers?, body }` or a promise of it (body: string, or anything JSON).
  * Returns the server's base URL, every request it got, and close().
  */
 export async function startFakeServer(respond) {
@@ -11,12 +11,13 @@ export async function startFakeServer(respond) {
 	const server = http.createServer((req, res) => {
 		let body = "";
 		req.on("data", (chunk) => (body += chunk));
-		req.on("end", () => {
+		req.on("end", async () => {
 			const request = { method: req.method, path: req.url, headers: req.headers, body };
 			requests.push(request);
 			let answer;
 			try {
-				answer = respond(request);
+				// An answer may be a promise: the e2e holds one back to close the review window mid-request
+				answer = await respond(request);
 			} catch (err) {
 				answer = { status: 500, body: String(err) };
 			}

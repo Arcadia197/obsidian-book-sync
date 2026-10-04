@@ -1,1 +1,781 @@
-/* Book Sync styles */
+/* Book Sync styles. Colours come from the theme: the accent is your vault, blue is Hardcover. */
+
+.book-sync-view {
+	--bs-hardcover: var(--color-blue);
+	--bs-hardcover-soft: rgba(var(--color-blue-rgb), 0.1);
+	--bs-accent-soft: hsla(var(--interactive-accent-hsl), 0.1);
+	--bs-warning-soft: rgba(var(--color-orange-rgb), 0.12);
+	--bs-ok-soft: rgba(var(--color-green-rgb), 0.12);
+	display: flex;
+	flex-direction: column;
+	padding: 0 !important;
+	overflow: hidden;
+}
+
+.book-sync-rail,
+.book-sync-foot {
+	flex: none;
+}
+
+.book-sync-body {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	padding: var(--size-4-6) var(--size-4-8) var(--size-4-8);
+}
+
+.book-sync-inner {
+	max-width: 680px;
+	margin: 0 auto;
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-3);
+}
+
+.book-sync-muted {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	margin: 0;
+}
+
+.book-sync-title,
+.book-sync-step-title {
+	margin: 0;
+	font-size: 1.4em;
+	font-weight: var(--font-bold);
+}
+
+.book-sync-eyebrow,
+.book-sync-label,
+.book-sync-phase-name {
+	font-size: var(--font-ui-smaller);
+	text-transform: uppercase;
+	letter-spacing: 0.07em;
+	color: var(--text-faint);
+	font-weight: var(--font-bold);
+}
+
+.book-sync-label {
+	margin-top: var(--size-4-2);
+}
+
+/* Start page */
+.book-sync-full {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-3);
+	width: 100%;
+	height: auto;
+	text-align: left;
+	padding: var(--size-4-4);
+	border-radius: var(--radius-l);
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.book-sync-full:hover {
+	background: var(--interactive-accent-hover);
+}
+
+.book-sync-full-icon svg {
+	width: 22px;
+	height: 22px;
+}
+
+.book-sync-full-text {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+}
+
+.book-sync-full-text small {
+	opacity: 0.85;
+	font-weight: normal;
+}
+
+.book-sync-phases {
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-l);
+	overflow: hidden;
+}
+
+.book-sync-phase {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-3);
+	padding: var(--size-4-3) var(--size-4-4);
+}
+
+.book-sync-phase + .book-sync-phase {
+	border-top: 1px solid var(--background-modifier-border);
+}
+
+.book-sync-phase-icon {
+	width: 34px;
+	height: 34px;
+	flex: none;
+	border-radius: var(--radius-m);
+	display: grid;
+	place-items: center;
+	background: var(--background-secondary);
+	color: var(--text-muted);
+}
+
+.book-sync-phase-text {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.book-sync-phase-text small {
+	color: var(--text-muted);
+}
+
+/* Step bar */
+.book-sync-steps {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-start;
+	gap: var(--size-4-2) var(--size-4-6);
+	padding: var(--size-4-3) var(--size-4-8);
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.book-sync-step-group {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-1);
+}
+
+.book-sync-step-row {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-1);
+}
+
+.book-sync-step-line {
+	width: 14px;
+	height: 1px;
+	background: var(--background-modifier-border);
+}
+
+.book-sync-step {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-1);
+	font-size: var(--font-ui-small);
+	color: var(--text-faint);
+}
+
+.book-sync-dot {
+	width: 20px;
+	height: 20px;
+	border-radius: 50%;
+	display: grid;
+	place-items: center;
+	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-bold);
+	border: 1.5px solid var(--background-modifier-border);
+	font-variant-numeric: tabular-nums;
+}
+
+.book-sync-dot svg {
+	width: 12px;
+	height: 12px;
+	stroke-width: 3;
+}
+
+.book-sync-step.is-current {
+	color: var(--text-normal);
+	font-weight: var(--font-semibold);
+}
+
+.book-sync-step.is-current .book-sync-dot {
+	border-color: var(--interactive-accent);
+	color: var(--interactive-accent);
+	box-shadow: 0 0 0 3px var(--bs-accent-soft);
+}
+
+.book-sync-step.is-done .book-sync-dot {
+	background: var(--color-green);
+	border-color: var(--color-green);
+	color: var(--background-primary);
+}
+
+.book-sync-step.is-passed .book-sync-dot {
+	border-style: dashed;
+}
+
+.book-sync-end {
+	margin-left: auto;
+	align-self: center;
+	display: flex;
+	gap: var(--size-4-1);
+	width: auto;
+	color: var(--text-muted);
+}
+
+/* Phone step bar: one line and a segment per step */
+.book-sync-rail-top {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--size-4-2);
+	padding: var(--size-4-2) var(--size-4-4) 0;
+	font-size: var(--font-ui-small);
+}
+
+.book-sync-rail-top > div {
+	flex: 1;
+	min-width: 0;
+}
+
+.book-sync-bar {
+	display: flex;
+	gap: 3px;
+	padding: var(--size-4-2) var(--size-4-4) var(--size-4-3);
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.book-sync-bar span {
+	flex: 1;
+	height: 4px;
+	border-radius: 2px;
+	background: var(--background-modifier-border);
+}
+
+.book-sync-bar span.is-done {
+	background: var(--color-green);
+}
+
+.book-sync-bar span.is-current {
+	background: var(--interactive-accent);
+}
+
+.book-sync-bar span.is-gap {
+	margin-left: 6px;
+}
+
+/* Boxes */
+.book-sync-box {
+	display: flex;
+	gap: var(--size-4-2);
+	padding: var(--size-4-2) var(--size-4-3);
+	border-radius: var(--radius-m);
+	font-size: var(--font-ui-small);
+}
+
+.book-sync-box-icon {
+	flex: none;
+	margin-top: 2px;
+}
+
+.book-sync-box-body {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-1);
+	overflow-wrap: anywhere;
+}
+
+.book-sync-box ul,
+.book-sync-notes ul {
+	margin: 0;
+	padding-left: var(--size-4-5);
+}
+
+.book-sync-box.is-warning {
+	background: var(--bs-warning-soft);
+}
+
+.book-sync-box.is-warning .book-sync-box-icon {
+	color: var(--color-orange);
+}
+
+.book-sync-box.is-ok {
+	background: var(--bs-ok-soft);
+}
+
+.book-sync-box.is-ok .book-sync-box-icon {
+	color: var(--color-green);
+}
+
+.book-sync-notes {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	overflow-wrap: anywhere;
+}
+
+.book-sync-notes summary {
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	padding: var(--size-4-1) 0;
+	list-style: none;
+}
+
+.book-sync-notes summary::-webkit-details-marker {
+	display: none;
+}
+
+.book-sync-notes > div,
+.book-sync-notes > ul {
+	margin-left: var(--size-4-6);
+}
+
+.book-sync-loading {
+	display: flex;
+	gap: var(--size-4-3);
+	align-items: flex-start;
+	padding: var(--size-4-4);
+	border-radius: var(--radius-l);
+	background: var(--background-secondary);
+}
+
+.book-sync-spinner {
+	width: 16px;
+	height: 16px;
+	flex: none;
+	margin-top: 2px;
+	border-radius: 50%;
+	border: 2px solid var(--background-modifier-border);
+	border-top-color: var(--interactive-accent);
+	animation: book-sync-spin 0.8s linear infinite;
+}
+
+@keyframes book-sync-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.book-sync-spinner {
+		animation-duration: 2.4s;
+	}
+}
+
+.book-sync-file-link {
+	font-size: var(--font-ui-small);
+	margin-left: var(--size-4-2);
+	white-space: nowrap;
+}
+
+.book-sync-step-title + .book-sync-muted + .book-sync-file-link {
+	margin-left: 0;
+}
+
+/* Change cards */
+.book-sync-group {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	margin-top: var(--size-4-1);
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-semibold);
+	color: var(--text-muted);
+}
+
+.book-sync-group svg {
+	width: 15px;
+	height: 15px;
+	color: var(--interactive-accent);
+}
+
+.book-sync-group.is-hardcover svg,
+.book-sync-group.is-hardcover .book-sync-link-button {
+	color: var(--bs-hardcover);
+}
+
+.book-sync-count {
+	color: var(--text-faint);
+	font-weight: normal;
+}
+
+.book-sync-group .book-sync-link-button {
+	margin-left: auto;
+}
+
+.book-sync-link-button {
+	background: none !important;
+	box-shadow: none !important;
+	border: 0;
+	padding: var(--size-4-1) var(--size-2-1);
+	height: auto;
+	color: var(--interactive-accent);
+	font-size: var(--font-ui-small);
+	cursor: pointer;
+	align-self: flex-start;
+}
+
+.book-sync-cards {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-2);
+}
+
+.book-sync-card {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	gap: var(--size-4-3);
+	padding: var(--size-4-3) var(--size-4-4);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	cursor: pointer;
+}
+
+.book-sync-card.is-selected {
+	background: var(--bs-accent-soft);
+	border-color: hsla(var(--interactive-accent-hsl), 0.45);
+}
+
+.book-sync-card.is-hardcover.is-selected {
+	background: var(--bs-hardcover-soft);
+	border-color: rgba(var(--color-blue-rgb), 0.45);
+}
+
+.book-sync-card.is-waiting {
+	border-style: dashed;
+}
+
+.book-sync-card.is-locked {
+	cursor: default;
+}
+
+.book-sync-card.is-locked:not(.is-selected) {
+	opacity: 0.7;
+}
+
+.book-sync-tick {
+	margin-top: 3px;
+}
+
+.book-sync-card.is-hardcover .book-sync-tick:checked {
+	background-color: var(--bs-hardcover);
+	border-color: var(--bs-hardcover);
+}
+
+.book-sync-card-main {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-1);
+	min-width: 0;
+}
+
+.book-sync-summary {
+	overflow-wrap: anywhere;
+}
+
+.book-sync-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	margin-left: var(--size-4-1);
+	padding: 0 7px;
+	border-radius: 999px;
+	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-semibold);
+	color: var(--bs-hardcover);
+	background: var(--bs-hardcover-soft);
+	vertical-align: 1px;
+	white-space: nowrap;
+}
+
+.book-sync-badge svg {
+	width: 12px;
+	height: 12px;
+}
+
+.book-sync-details {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.book-sync-details li::before {
+	content: "· ";
+	color: var(--text-faint);
+}
+
+.book-sync-warning {
+	display: flex;
+	gap: var(--size-4-2);
+	align-items: flex-start;
+	padding: var(--size-4-1) var(--size-4-2);
+	border-radius: var(--radius-s);
+	background: var(--bs-warning-soft);
+	font-size: var(--font-ui-small);
+}
+
+.book-sync-warning svg {
+	color: var(--color-orange);
+	width: 14px;
+	height: 14px;
+	margin-top: 3px;
+}
+
+.book-sync-result {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-1);
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-semibold);
+}
+
+.book-sync-result svg {
+	width: 14px;
+	height: 14px;
+}
+
+.book-sync-result.is-ok {
+	color: var(--color-green);
+}
+
+.book-sync-result.is-skipped {
+	color: var(--color-orange);
+}
+
+.book-sync-result.is-none {
+	color: var(--text-faint);
+	font-weight: normal;
+}
+
+/* Fields inside a card */
+.book-sync-field {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-1);
+	cursor: default;
+}
+
+.book-sync-field-label {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-1);
+	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-semibold);
+	color: var(--text-muted);
+}
+
+.book-sync-field-label svg {
+	width: 13px;
+	height: 13px;
+	color: var(--interactive-accent);
+}
+
+.book-sync-text {
+	width: 100%;
+}
+
+.book-sync-lookup {
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+	min-height: 1.4em;
+}
+
+.book-sync-lookup.is-ok {
+	color: var(--color-green);
+}
+
+.book-sync-chips {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--size-4-1);
+	padding: var(--size-4-1) var(--size-4-2);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--input-radius);
+	background: var(--background-modifier-form-field);
+	cursor: text;
+}
+
+.book-sync-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 1px;
+	padding: 1px 2px 1px 10px;
+	border-radius: 999px;
+	background: var(--background-modifier-hover);
+	font-size: var(--font-ui-small);
+}
+
+.book-sync-chip button {
+	width: 22px;
+	height: 22px;
+	padding: 0;
+	border-radius: 50%;
+	background: none !important;
+	box-shadow: none !important;
+	color: var(--text-muted);
+}
+
+.book-sync-chip button svg {
+	width: 12px;
+	height: 12px;
+}
+
+.book-sync-view input.book-sync-chip-input {
+	flex: 1;
+	min-width: 90px;
+	border: 0;
+	background: none;
+	box-shadow: none;
+	padding: 2px;
+	height: auto;
+}
+
+.book-sync-suggestions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-4-1);
+	font-size: var(--font-ui-small);
+}
+
+.book-sync-suggestions:empty {
+	display: none;
+}
+
+.book-sync-suggestions button {
+	height: auto;
+	padding: 1px 10px;
+	border-radius: 999px;
+	border: 1px dashed var(--background-modifier-border);
+	background: none;
+	box-shadow: none;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.book-sync-refine {
+	display: flex;
+	gap: var(--size-4-2);
+}
+
+/* Footer */
+.book-sync-foot {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-3);
+	padding: var(--size-4-2) var(--size-4-8);
+	border-top: 1px solid var(--background-modifier-border);
+	background: var(--background-primary);
+}
+
+.book-sync-foot:empty {
+	display: none;
+}
+
+.book-sync-foot-info {
+	flex: 1;
+	min-width: 0;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.book-sync-foot-buttons {
+	display: flex;
+	gap: var(--size-4-2);
+}
+
+.book-sync-foot button.mod-cta.is-hardcover {
+	background: var(--bs-hardcover);
+}
+
+/* Summary */
+.book-sync-done {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: var(--size-4-1);
+}
+
+.book-sync-done-badge {
+	width: 40px;
+	height: 40px;
+	border-radius: 50%;
+	display: grid;
+	place-items: center;
+	color: var(--color-green);
+	background: var(--bs-ok-soft);
+}
+
+.book-sync-tally {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: var(--font-ui-small);
+}
+
+.book-sync-tally td {
+	padding: var(--size-4-2) 0;
+	border-bottom: 1px solid var(--background-modifier-border);
+	vertical-align: top;
+}
+
+.book-sync-tally td:last-child {
+	text-align: right;
+	color: var(--text-muted);
+	padding-left: var(--size-4-3);
+	white-space: nowrap;
+}
+
+/* Phone: one-line step bar, bigger targets, 16px fields so the phone doesn't zoom in */
+.book-sync-view.is-phone .book-sync-body {
+	padding: var(--size-4-3) var(--size-4-3) var(--size-4-6);
+}
+
+.book-sync-view.is-phone .book-sync-foot {
+	flex-wrap: wrap;
+	padding: var(--size-4-2) var(--size-4-3) var(--size-4-3);
+}
+
+.book-sync-view.is-phone .book-sync-foot-info {
+	flex-basis: 100%;
+}
+
+.book-sync-view.is-phone .book-sync-foot-buttons {
+	width: 100%;
+}
+
+.book-sync-view.is-phone .book-sync-foot-buttons button {
+	min-height: 44px;
+}
+
+.book-sync-view.is-phone .book-sync-foot-buttons button.mod-cta {
+	flex: 1;
+}
+
+.book-sync-view.is-phone .book-sync-tick {
+	width: 22px;
+	height: 22px;
+}
+
+.book-sync-view.is-phone .book-sync-card {
+	padding: var(--size-4-3);
+}
+
+.book-sync-view.is-phone input[type="text"] {
+	font-size: 16px;
+}
+
+.book-sync-view.is-phone .book-sync-chip button {
+	width: 30px;
+	height: 30px;
+}
+
+.book-sync-view.is-phone .book-sync-link-button,
+.book-sync-view.is-phone .book-sync-suggestions button {
+	padding: var(--size-4-2) var(--size-4-3);
+}
+
+.book-sync-view.is-phone .book-sync-refine {
+	flex-direction: column;
+}
+
+.book-sync-view.is-phone .book-sync-end {
+	margin-left: 0;
+}
