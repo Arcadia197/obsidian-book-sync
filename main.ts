@@ -1,13 +1,14 @@
 import { Platform, Plugin, WorkspaceLeaf } from "obsidian";
 import { Clients, createClients, Endpoints } from "./src/api/clients";
 import { ApplyResult, Change, Plan, selectedChanges, StepId } from "./src/core/changes";
+import { doneTodos, mergeTodos, parseTodos, Todo, TodoChecks } from "./src/core/todos";
 import { obsidianHttp } from "./src/obsidianHttp";
 import { obsidianVault } from "./src/obsidianVault";
 import { FULL_SYNC, PHASES } from "./src/run/stepInfo";
 import { BookSyncSettings, mergeSettings, migrateSecretNames } from "./src/settings";
 import { STEPS } from "./src/steps";
-import type { PlanContext } from "./src/steps/context";
-import { planAddBook } from "./src/steps/addBook";
+import { loadBacklog, PlanContext, rowGoodreadsId } from "./src/steps/context";
+import { localDate, planAddBook } from "./src/steps/addBook";
 import { LinkPayload, resolveLinkInput } from "./src/steps/linkIds";
 import { PullPayload, refinePullLabels } from "./src/steps/pullGoodreads";
 import { BookSyncView, VIEW_TYPE } from "./src/ui/BookSyncView";
@@ -17,11 +18,16 @@ export default class BookSyncPlugin extends Plugin {
 	settings!: BookSyncSettings;
 	/** Where requests go when no endpoints are passed; only the e2e test sets it (fake servers) */
 	endpoints?: Endpoints;
+	/** "Left for you", kept in data.json next to the settings so every synced device shows the same list */
+	todos: Todo[] = [];
 	private statusEl: HTMLElement | null = null;
+	/** When Hardcover and Goodreads were last asked whether items are done (local checks run every time) */
+	private lastRemoteCheck = 0;
 
 	async onload() {
 		const saved = await this.loadData();
 		this.settings = mergeSettings(saved);
+		this.todos = parseTodos(saved?.todos);
 		if (migrateSecretNames(saved, this.settings, (name) => this.app.secretStorage?.getSecret(name) ?? null)) {
 			await this.saveSettings();
 		}
@@ -45,7 +51,73 @@ export default class BookSyncPlugin extends Plugin {
 	}
 
 	async saveSettings() {
-		await this.saveData(this.settings);
+		await this.saveData({ ...this.settings, todos: this.todos });
+	}
+
+	/** data.json changed on disk (Obsidian Sync brought another device's edits): take its settings and list */
+	async onExternalSettingsChange() {
+		const saved = await this.loadData();
+		this.settings = mergeSettings(saved);
+		this.todos = parseTodos(saved?.todos);
+		this.refreshViews();
+	}
+
+	/** Adds items to "Left for you" (one per key) and saves */
+	async addTodos(items: Todo[]): Promise<void> {
+		if (!items.length) {
+			return;
+		}
+		this.todos = mergeTodos(this.todos, items, localDate());
+		await this.saveSettings();
+	}
+
+	/** Ticks an item off by hand */
+	async removeTodo(key: string): Promise<void> {
+		this.todos = this.todos.filter((t) => t.key !== key);
+		await this.saveSettings();
+	}
+
+	/**
+	 * Drops the items that are done: note fields filled, Labels added (read from the vault every time), edition picked
+	 * and Goodreads shelf updated (asked online at most every 10 minutes). Returns how many went. Errors keep items.
+	 */
+	async checkTodos(): Promise<number> {
+		const saved = await this.loadData();
+		this.todos = parseTodos(saved?.todos);
+		if (!this.todos.length) {
+			return 0;
+		}
+		const vault = obsidianVault(this.app);
+		let backlog: ReturnType<typeof loadBacklog> | null = null;
+		const checks: TodoChecks = {
+			readNote: (path) => vault.read(path),
+			rowLabels: async (goodreadsId) => {
+				backlog ??= loadBacklog(vault, this.settings);
+				const row = (await backlog).rows.find((r) => rowGoodreadsId(r) === goodreadsId);
+				return row ? row.cells["Labels"] ?? "" : null;
+			},
+		};
+		const remote = this.todos.some((t) => t.check?.kind === "edition" || t.check?.kind === "offShelf");
+		if (remote && Date.now() - this.lastRemoteCheck > 10 * 60 * 1000) {
+			this.lastRemoteCheck = Date.now();
+			const clients = this.clients();
+			if (this.settings.hardcoverToken) checks.editions = (ids) => clients.hardcover.shelfEditions(ids);
+			if (this.settings.goodreadsRssUrl) {
+				checks.shelfIds = async () => new Set((await clients.goodreads.fetchShelf(this.settings.goodreadsRssUrl)).map((e) => e.goodreadsId));
+			}
+		}
+		const done = await doneTodos(this.todos, checks);
+		if (done.size) {
+			this.todos = this.todos.filter((t) => !done.has(t.key));
+			await this.saveSettings();
+		}
+		return done.size;
+	}
+
+	private refreshViews(): void {
+		for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
+			if (leaf.view instanceof BookSyncView) leaf.view.refresh();
+		}
 	}
 
 	/** Fresh API clients with the current keys; `endpoints` is for the e2e test's fake servers */
@@ -73,7 +145,9 @@ export default class BookSyncPlugin extends Plugin {
 	/** Writes the plan's ticked, ready changes. Only the push and labels steps use the Hardcover writer */
 	async applyStep(plan: Plan, endpoints = this.endpoints): Promise<ApplyResult> {
 		const ctx = { vault: obsidianVault(this.app), settings: this.settings, hardcover: this.clients(endpoints).hardcoverWriter };
-		return STEPS[plan.step].apply(ctx, selectedChanges(plan));
+		const result = await STEPS[plan.step].apply(ctx, selectedChanges(plan));
+		await this.addTodos(result.todos ?? []);
+		return result;
 	}
 
 	/** "Add a book": the row a Goodreads link or id would become. Reads only */

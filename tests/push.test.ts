@@ -72,6 +72,10 @@ test("apply: nothing ticked sends nothing; ticked rows are added with their date
 	assert.deepEqual(result.applied, ["push:101", "push:108"]);
 	assert.match(result.messages[0], /no edition picked/);
 	assert.deepEqual(result.messages.slice(1), ["  - New One (Ann): https://hardcover.app/books/new-one", "  - No Date (Hal): https://hardcover.app/books/no-date"]);
+	assert.deepEqual(result.todos?.map((t) => [t.key, t.text, t.url, t.check]), [
+		["edition:101", "New One (Ann): pick your edition on Hardcover", "https://hardcover.app/books/new-one", { kind: "edition", bookId: 101 }],
+		["edition:108", "No Date (Hal): pick your edition on Hardcover", "https://hardcover.app/books/no-date", { kind: "edition", bookId: 108 }],
+	], "each pushed book's edition goes on the Left for you list");
 	assert.equal(ctx.vault.writes.length, 0);
 });
 

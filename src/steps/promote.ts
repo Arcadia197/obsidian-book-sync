@@ -7,6 +7,7 @@
 //   their status by title + author: a guess, so these start unticked and the id stays editable
 // - An existing note file is never overwritten
 
+import { noteFieldsTodo, offShelfTodo } from "../core/todos";
 import type { ApplyResult, Change, Plan } from "../core/changes";
 import { emptyResult } from "../core/changes";
 import { parseGoodreadsId } from "../core/idLinks";
@@ -28,7 +29,7 @@ export type PromotePayload =
 			/** The backlog row to remove once the note exists; null for a book that never had one */
 			row: RowKey | null;
 	  }
-	| { kind: "removeRow"; key: RowKey }
+	| { kind: "removeRow"; key: RowKey; name: string }
 	| MergePayload;
 
 function seriesWarning(built: BuiltNote): string[] {
@@ -96,7 +97,7 @@ export async function planPromote(ctx: PlanContext): Promise<Plan<PromotePayload
 				selected: true,
 				ready: true,
 				file: existing.note.path,
-				payload: { kind: "removeRow", key: rowKey(row) },
+				payload: { kind: "removeRow", key: rowKey(row), name: describeRow(row) },
 			});
 			continue;
 		}
@@ -227,6 +228,20 @@ export async function applyPromote(ctx: ApplyContext, changes: Change<PromotePay
 			await ctx.vault.create(path, built.text);
 			result.applied.push(change.id);
 			result.messages.push(`Created ${built.filename}. Still needs by hand: ${built.stillNeeded.join(", ")}`);
+			const name = built.filename.replace(/\.md$/, "");
+			const todos = (result.todos ??= []);
+			todos.push(...noteFieldsTodo(path, name, built.stillNeeded));
+			if (built.noEdition) {
+				todos.push({
+					key: `edition:${payload.entry.book_id}`,
+					text: `${name}: pick your edition on Hardcover, then check the note against it`,
+					url: `https://hardcover.app/books/${payload.entry.book.slug}`,
+					check: { kind: "edition", bookId: payload.entry.book_id },
+				});
+			}
+			if (payload.row && backlog.goodreadsId) {
+				todos.push(offShelfTodo(backlog.goodreadsId, name));
+			}
 			if (payload.row) {
 				removals.push({ id: change.id, key: payload.row });
 			}
@@ -247,6 +262,9 @@ export async function applyPromote(ctx: ApplyContext, changes: Change<PromotePay
 		if (change.payload.kind === "removeRow") {
 			if (found[i]) {
 				result.applied.push(removal.id);
+				if (removal.key.goodreadsId) {
+					(result.todos ??= []).push(offShelfTodo(removal.key.goodreadsId, change.payload.name));
+				}
 			} else {
 				result.skipped.push({ id: removal.id, reason: "row not found (already removed or changed)" });
 			}

@@ -141,6 +141,12 @@ export async function applyPush(ctx: WritingApplyContext, changes: Change<PushPa
 			}
 		}
 	}
+	if (pushed.length) result.todos = pushed.map((p) => ({
+		key: `edition:${p.bookId}`,
+		text: `${p.name}: pick your edition on Hardcover`,
+		url: p.slug ? hardcoverBookUrl(p.slug) : undefined,
+		check: { kind: "edition" as const, bookId: p.bookId },
+	}));
 	if (pushed.length) {
 		result.messages.push(
 			"IMPORTANT: these were added to Hardcover with no edition picked (insert_user_book takes none), so Hardcover shows a default edition. Choose the edition you own or read for each:",

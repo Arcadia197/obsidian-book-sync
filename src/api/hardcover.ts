@@ -279,6 +279,23 @@ export class HardcoverReader {
 		return me.user_books;
 	}
 
+	/** Of these books, the ones on your shelves (any status), and those with an edition picked ("Left for you") */
+	async shelfEditions(ids: Iterable<string | number>): Promise<{ tracked: Set<number>; picked: Set<number> }> {
+		const wanted = bookIds(ids);
+		if (!wanted.length) {
+			return { tracked: new Set(), picked: new Set() };
+		}
+		// Schemas/UserBooks.mdx: edition is null until one is picked
+		const me = await this.me<{ user_books: { book_id: number; edition: { id: number } | null }[] }>(
+			`query ShelfEditions($ids: [Int!]!) { me { user_books(where: {book_id: {_in: $ids}}) { book_id edition { id } } } }`,
+			{ ids: wanted },
+		);
+		return {
+			tracked: new Set(me.user_books.map((u) => u.book_id)),
+			picked: new Set(me.user_books.filter((u) => u.edition).map((u) => u.book_id)),
+		};
+	}
+
 	/** Status, rating, review and finish date for these books, any status (check_finished_from_hardcover.py) */
 	async finishedInfo(ids: Iterable<string | number>): Promise<FinishedInfo[]> {
 		const wanted = bookIds(ids);

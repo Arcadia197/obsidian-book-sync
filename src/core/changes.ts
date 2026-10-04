@@ -3,6 +3,8 @@
 // Files are reached through VaultReader/VaultWriter, so the steps run on Obsidian's vault, in memory (tests) or on
 // a read-only folder (parity script) alike.
 
+import type { Todo } from "./todos";
+
 export type StepId =
 	| "backlog/pullGoodreads"
 	| "backlog/linkIds"
@@ -60,6 +62,8 @@ export interface ApplyResult {
 	skipped: { id: string; reason: string }[];
 	/** Reminders after writing, e.g. "update Goodreads by hand" */
 	messages: string[];
+	/** What is left to do by hand, for the "Left for you" list (kept across runs and devices) */
+	todos?: Todo[];
 }
 
 export function emptyResult(): ApplyResult {

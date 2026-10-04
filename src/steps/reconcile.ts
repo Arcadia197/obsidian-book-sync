@@ -1,6 +1,7 @@
 // archive/reconcile: backlog rows whose book already has a Database/ note (e.g. a note made by hand) are removed.
 // Port of reconcile_promoted.py. The user updates Goodreads by hand at the same time, so every removal is reviewed.
 
+import { offShelfTodo } from "../core/todos";
 import type { ApplyResult, Change, Plan, VaultWriter } from "../core/changes";
 import { emptyResult } from "../core/changes";
 import { serializeTable } from "../core/table";
@@ -9,6 +10,8 @@ import { ApplyContext, describeRow, findRow, loadBacklog, loadNotes, parseBacklo
 
 export interface RemoveRowPayload {
 	key: RowKey;
+	/** "Title (Author)", for the Goodreads reminder */
+	name: string;
 }
 
 /** A backlog row's Notes, shown before it goes: never carried over automatically */
@@ -65,7 +68,7 @@ export async function planReconcile(ctx: PlanContext): Promise<Plan<RemoveRowPay
 			selected: true,
 			ready: true,
 			file: notePath,
-			payload: { key: rowKey(row) },
+			payload: { key: rowKey(row), name: describeRow(row) },
 		});
 	}
 	if (!plan.changes.length) {
@@ -80,6 +83,9 @@ export async function applyReconcile(ctx: ApplyContext, changes: Change<RemoveRo
 	changes.forEach((change, i) => {
 		if (found[i]) {
 			result.applied.push(change.id);
+			if (change.payload.key.goodreadsId) {
+				(result.todos ??= []).push(offShelfTodo(change.payload.key.goodreadsId, change.payload.name));
+			}
 		} else {
 			result.skipped.push({ id: change.id, reason: "row not found (already removed or changed)" });
 		}

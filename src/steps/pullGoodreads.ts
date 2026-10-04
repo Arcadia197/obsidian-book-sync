@@ -280,6 +280,12 @@ export async function applyPull(ctx: ApplyContext, changes: Change<PullPayload>[
 				}
 				if (!kept.length) {
 					blankLabels++;
+					(result.todos ??= []).push({
+						key: `labels:${entry.goodreadsId}`,
+						text: `${entry.title} (${entry.author}): add Labels in Want to Read`,
+						file: path,
+						check: { kind: "rowLabels", goodreadsId: entry.goodreadsId },
+					});
 				}
 				addRow(table, {
 					Title: entry.title,

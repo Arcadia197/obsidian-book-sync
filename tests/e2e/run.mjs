@@ -534,6 +534,36 @@ try {
 	const dupe = await ui(`return root.querySelector(".book-sync-add").textContent;`);
 	check("view: a book already in Want to Read is refused before anything is written",
 		/Already in Want to Read: The Salt & the Sea/.test(dupe) && backlog().split("[2000001](").length === 2, dupe);
+
+	// --- Left for you: what the applies above left to do by hand, kept in data.json for every synced device
+	const todoKeys = () => (pluginData().todos ?? []).map((t) => t.key);
+	const kept = pluginData().todos?.find((t) => t.key === "labels:1000004");
+	// promote and reconcile also left "update Goodreads" items; the view's check on opening found those books off the
+	// (fake) to-read shelf, so they are gone again
+	check("left for you: applies put their hand work into data.json (blank Labels, edition to pick, note fields); Goodreads items cleared once off the shelf",
+		kept?.added === today && kept.check?.kind === "rowLabels" && todoKeys().includes("edition:8001")
+			&& todoKeys().some((k) => k.startsWith("fields:")) && !todoKeys().some((k) => k.startsWith("shelf:")),
+		JSON.stringify(pluginData().todos));
+	await reload();
+	await cdp.eval(`plugin.endpoints = ${endpoints};`);
+	check("left for you: the list survives a plugin reload", await cdp.eval(`return plugin.todos.length;`) === pluginData().todos.length);
+
+	await cdp.eval(`app.commands.executeCommandById("${PLUGIN_ID}:open");`);
+	await waitUi(`root?.querySelector('[data-todo-key="labels:1000004"]')`);
+	const shown = await ui(`return { items: root.querySelectorAll(".book-sync-todos li").length, status: document.querySelector(".book-sync-status")?.textContent };`);
+	await ui(`root.querySelector('[data-todo-key="labels:1000004"] input').click();`);
+	await waitUi(`!root?.querySelector('[data-todo-key="labels:1000004"]')`);
+	check("left for you: the start page lists every item, the status bar counts them, ticking one removes it from data.json",
+		shown.items === pluginData().todos.length + 1 && shown.status === `Book Sync: ${shown.items} left for you` && !todoKeys().includes("labels:1000004"),
+		JSON.stringify({ shown, keys: todoKeys() }));
+
+	const DONE_NOTE = "Books/Database/Fay Writer - Fill Me.md";
+	await cdp.eval(`await app.vault.create(${JSON.stringify(DONE_NOTE)}, "---\\nmedium:\\n---\\n");
+		await plugin.addTodos([{ key: "fields:fill-me", text: "Fill Me: fill medium", check: { kind: "noteFields", path: ${JSON.stringify(DONE_NOTE)}, fields: ["medium"] } }]);`);
+	const stillOpen = await cdp.eval(`await plugin.checkTodos(); return plugin.todos.some((t) => t.key === "fields:fill-me");`);
+	await cdp.eval(`await app.vault.adapter.write(${JSON.stringify(DONE_NOTE)}, "---\\nmedium: paper\\n---\\n"); await plugin.checkTodos();`);
+	check("left for you: an item ticks itself off once the field is filled; an offline remote check keeps its items",
+		stillOpen && !todoKeys().includes("fields:fill-me") && todoKeys().includes("edition:8001"), JSON.stringify(todoKeys()));
 } catch (err) {
 	check("e2e run finished without an exception", false, err.stack ?? String(err));
 } finally {

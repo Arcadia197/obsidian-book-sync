@@ -59,6 +59,7 @@ test("apply: hand-owned columns untouched, unkeyed row kept, table sorted newest
 	assert.equal(table.rows[0].cells.goodreads_id, "[50](https://www.goodreads.com/book/show/50)");
 	assert.ok(text.includes("> [!note]- How to edit this table by hand") && text.endsWith("Text below the table.\n"));
 	assert.match(result.messages.join("\n"), /1 new row\(s\) have no Labels yet/);
+	assert.deepEqual(result.todos?.map((t) => [t.key, t.check]), [["labels:50", { kind: "rowLabels", goodreadsId: "50" }]]);
 });
 
 test("apply: unticked changes write nothing; nothing ticked means no write at all", async () => {

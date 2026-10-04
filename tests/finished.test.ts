@@ -90,6 +90,7 @@ test("apply: dateRead, rating_10 and review written; an unticked note and the re
 	assert.equal(getField(merged, "dateRead"), "2026-08-01");
 	assert.equal(result.applied.length, 3);
 	assert.ok(result.messages.includes("Updated Don - Done.md. Still needs by hand: labels."));
+	assert.ok(result.todos?.some((t) => t.key === `fields:${notes.done}` && t.text === "Don - Done: fill labels"));
 });
 
 test("apply twice: the review is added only once", async () => {

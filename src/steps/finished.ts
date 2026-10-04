@@ -2,6 +2,7 @@
 // Hardcover review. Port of check_finished_from_hardcover.py. Hardcover wins for dates read and rating; a missing
 // rating or review is reported, not waited for. Ids are resolved through Hardcover's merges first.
 
+import { noteFieldsTodo } from "../core/todos";
 import type { ApplyResult, Change, Plan } from "../core/changes";
 import { emptyResult } from "../core/changes";
 import { applyFinished, stillNeededFields, toRating10 } from "../core/databaseNote";
@@ -115,6 +116,7 @@ export async function applyFinishedStep(ctx: ApplyContext, changes: Change<Finis
 		result.applied.push(change.id);
 		const stillNeeded = stillNeededFields(text);
 		const name = payload.path.split("/").pop();
+		(result.todos ??= []).push(...noteFieldsTodo(payload.path, name!.replace(/\.md$/, ""), stillNeeded));
 		result.messages.push(`Updated ${name}.${stillNeeded.length ? ` Still needs by hand: ${stillNeeded.join(", ")}.` : ""}`);
 	}
 	return result;

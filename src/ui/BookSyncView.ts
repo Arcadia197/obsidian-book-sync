@@ -21,6 +21,8 @@ export class BookSyncView extends ItemView {
 	private footEl!: HTMLElement;
 	/** Phone cards whose details are unfolded */
 	private unfolded = new Set<string>();
+	/** "Left for you" keys before the run, to show what it added */
+	private todosBefore = new Set<string>();
 	/** Steps whose "nothing to do" was already announced */
 	private announced = new Set<SessionEntry>();
 	private refineText = "";
@@ -52,6 +54,14 @@ export class BookSyncView extends ItemView {
 
 	async onOpen(): Promise<void> {
 		this.render();
+		this.checkTodos();
+	}
+
+	/** Clears "Left for you" items that are done by now, quietly, and redraws if any went */
+	private checkTodos(): void {
+		void this.plugin.checkTodos().then((cleared) => {
+			if (cleared && !this.session) this.render();
+		});
 	}
 
 	/** Draws the current state; safe before onOpen (Obsidian may open a view in a background window late) */
@@ -101,6 +111,7 @@ export class BookSyncView extends ItemView {
 		}
 		this.unfolded.clear();
 		this.announced.clear();
+		this.todosBefore = new Set(this.plugin.todos.map((t) => t.key));
 		this.refineText = "";
 		this.session = new SyncSession(steps, { plan: (id) => this.plugin.planStep(id), apply: (plan) => this.plugin.applyStep(plan) }, () =>
 			this.onSessionChange(),
@@ -135,6 +146,7 @@ export class BookSyncView extends ItemView {
 			new Notice("Sync ended. Steps you hadn't applied wrote nothing.");
 		}
 		this.render();
+		this.checkTodos();
 	}
 
 	// ---- rendering -------------------------------------------------------------------------------------------
@@ -173,7 +185,8 @@ export class BookSyncView extends ItemView {
 	private updateStatus(): void {
 		const session = this.session;
 		if (!session) {
-			this.plugin.setStatus("");
+			const left = this.plugin.todos.length;
+			this.plugin.setStatus(left ? `Book Sync: ${left} left for you` : "");
 			return;
 		}
 		if (session.finished) {
@@ -203,6 +216,8 @@ export class BookSyncView extends ItemView {
 		setIcon(full.createSpan(), "chevron-right");
 		full.addEventListener("click", () => this.startRun(FULL_SYNC));
 
+		this.renderTodos(inner);
+
 		inner.createDiv({ cls: "book-sync-label", text: "Or one part" });
 		const phases = inner.createDiv({ cls: "book-sync-phases" });
 		const icons = { backlog: "book-open", labels: "tag", archive: "archive" };
@@ -218,6 +233,35 @@ export class BookSyncView extends ItemView {
 
 		inner.createDiv({ cls: "book-sync-label", text: "Add a book" });
 		this.renderAddBook(inner.createDiv({ cls: "book-sync-add" }));
+	}
+
+	private renderTodos(parent: HTMLElement): void {
+		const todos = this.plugin.todos;
+		if (!todos.length) {
+			return;
+		}
+		parent.createDiv({ cls: "book-sync-label", text: `Left for you · ${todos.length}` });
+		const list = parent.createEl("ul", { cls: "book-sync-todos" });
+		for (const todo of todos) {
+			const item = list.createEl("li");
+			item.dataset.todoKey = todo.key;
+			const tick = item.createEl("input", { type: "checkbox", attr: { "aria-label": "Done" } });
+			const words = item.createDiv({ cls: "book-sync-todo-text" });
+			words.createSpan({ text: todo.text });
+			if (todo.file) this.fileLink(words, todo.file, "Open");
+			if (todo.url) words.createEl("a", { cls: "book-sync-file-link external-link", text: "Open", href: todo.url });
+			if (todo.added) words.createSpan({ cls: "book-sync-todo-date", text: todo.added });
+			tick.addEventListener("change", async () => {
+				tick.disabled = true;
+				item.addClass("is-done");
+				await this.plugin.removeTodo(todo.key);
+				window.setTimeout(() => this.render(), 250);
+			});
+		}
+		parent.createEl("p", {
+			cls: "book-sync-muted",
+			text: "The same list on every synced device. Items tick themselves off once Book Sync sees them done.",
+		});
 	}
 
 	private renderAddBook(box: HTMLElement): void {
@@ -678,10 +722,18 @@ export class BookSyncView extends ItemView {
 				row.status === "applied" ? `${row.written} written${row.skipped ? `, ${row.skipped} skipped` : ""}` : row.status === "empty" ? "nothing to do" : "skipped";
 			tr.createEl("td", { text: outcome });
 		});
+		const added = this.plugin.todos.filter((t) => !this.todosBefore.has(t.key));
+		if (added.length) {
+			inner.createDiv({ cls: "book-sync-label", text: "New on your Left for you list" });
+			const list = inner.createEl("ul", { cls: "book-sync-details" });
+			added.forEach((t) => list.createEl("li", { text: t.text }));
+			inner.createEl("p", { cls: "book-sync-muted", text: "They stay on the Book Sync start page, on every device, until they're done." });
+		}
 		const back = inner.createEl("button", { text: "Back to Book Sync" });
 		back.addEventListener("click", () => {
 			this.session = null;
 			this.render();
+			this.checkTodos();
 		});
 	}
 
