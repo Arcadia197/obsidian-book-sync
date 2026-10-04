@@ -8,6 +8,7 @@
 		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
 		"test": "node tests/run.mjs",
 		"test:e2e": "npm run build && node tests/e2e/run.mjs",
+		"check:vault": "node tests/vault/run.mjs",
 		"release": "release-it",
 		"prepare": "husky"
 	},
