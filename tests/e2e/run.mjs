@@ -68,6 +68,62 @@ function stepsHardcover({ query, variables }) {
 }
 let hardcoverScenario = null;
 
+// Hardcover for push and labels (step 5): shelves, lists and members change as mutations come in, so a second apply
+// or a retry sees what the first one wrote. `failSlugOnce` makes the slug query after a list is created fail once:
+// the list exists on Hardcover, but the run stops before recording it
+const writing = { mutations: [], userBooks: [{ book_id: 8002, status_id: 2, title: "Tracked Book", author: "Bea Writer" }],
+	lists: [{ id: 7101, name: "Sci-Fi", slug: "sci-fi" }], members: { 7101: [8001] }, failSlugOnce: false };
+function writingHardcover({ query, variables }) {
+	const data = (d) => ({ status: 200, body: { data: d } });
+	const me = (d) => data({ me: [d] });
+	if (/^\s*mutation/.test(query)) {
+		writing.mutations.push({ query: query.match(/mutation (\w+)/)[1], object: variables.object });
+		if (query.includes("insert_user_book")) {
+			writing.userBooks.push({ book_id: variables.object.book_id, status_id: 1, title: "?", author: "?" });
+			return data({ insert_user_book: { id: 9000 + writing.userBooks.length, error: null } });
+		}
+		if (query.includes("insert_list_book")) {
+			(writing.members[variables.object.list_id] ??= []).push(variables.object.book_id);
+			return data({ insert_list_book: { id: 9500 + writing.mutations.length } });
+		}
+		if (query.includes("insert_list")) {
+			const list = { id: 7200 + writing.lists.length, name: variables.object.name, slug: variables.object.name.toLowerCase() };
+			writing.lists.push(list);
+			return data({ insert_list: { id: list.id, errors: null } });
+		}
+	}
+	if (query.includes("GetListSlug")) {
+		if (writing.failSlugOnce) {
+			writing.failSlugOnce = false;
+			return { status: 500, body: "connection dropped" };
+		}
+		return data({ lists: writing.lists.filter((l) => l.id === variables.id).map((l) => ({ slug: l.slug })) });
+	}
+	if (query.includes("GetListBooks")) return data({ list_books: (writing.members[variables.list_id] ?? []).map((book_id) => ({ book_id })) });
+	if (query.includes("lists { id name slug }")) return me({ lists: writing.lists });
+	if (query.includes("ResolveMerges")) return data({ books: [] });
+	if (query.includes("FinishedInfo")) {
+		return me({ user_books: writing.userBooks.filter((u) => variables.ids.includes(u.book_id))
+			.map((u) => ({ book_id: u.book_id, status_id: u.status_id, rating: null, review: null, first_read_date: null })) });
+	}
+	if (query.includes("contributions")) {
+		return me({ user_books: writing.userBooks.map((u) => ({ book_id: u.book_id, status_id: u.status_id,
+			book: { title: u.title, contributions: [{ contribution: null, author: { name: u.author } }] } })) });
+	}
+	return { status: 500, body: "unexpected query" };
+}
+const WRITING_BACKLOG = [
+	"# Want to Read", "",
+	"| Title | Author | DateAdded | Genre | Labels | Notes | isbn | goodreads_id | hardcover_id |",
+	"| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+	`| Pushed Book | Ada Writer | 2026-10-02 |  |  |  |  | ${gr(4000001)} | [8001](https://hardcover.app/books/pushed-book) |`,
+	`| Tracked Book | Bea Writer | 2026-10-01 |  | Sci-Fi |  |  | ${gr(4000002)} | [8002](https://hardcover.app/books/tracked-book) |`,
+	`| Unticked Book | Cid Writer | 2026-09-30 |  | Poetry, Sci-Fi |  |  | ${gr(4000003)} | [8003](https://hardcover.app/books/unticked-book) |`,
+	"",
+].join("\n");
+const LISTS_PATH = "Books/Hardcover Lists.md";
+const LISTS_FILE = ["# Hardcover Lists", "", "| Label | hardcover_list |", "| --- | --- |", "| Sci-Fi | [7101](https://hardcover.app/lists/sci-fi) |", "", "Text below.", ""].join("\n");
+
 createVault({ ...STEP_FILES }, { booksFolder: "Books", legacySetting: "drop me" });
 
 const fixture = (name) => readFileSync(new URL(`../fixtures/${name}`, import.meta.url), "utf8");
@@ -163,7 +219,8 @@ try {
 		JSON.stringify(Object.keys(pluginData())));
 
 	// --- API clients through Obsidian's requestUrl, against the local fake servers
-	const endpoints = JSON.stringify({ hardcover: `${fake.url}/graphql`, goodreads: fake.url, openai: `${fake.url}/chat` });
+	// 20ms pacing instead of Hardcover's 1.1s per request: the fake server has no rate limit, and the run stays short
+	const endpoints = JSON.stringify({ hardcover: `${fake.url}/graphql`, goodreads: fake.url, openai: `${fake.url}/chat`, hardcoverIntervalMs: 20 });
 	const sent = () => fake.requests.length;
 
 	queue.hardcover.push("merges");
@@ -239,7 +296,7 @@ try {
 	hardcoverScenario = stepsHardcover;
 	await cdp.eval(`plugin.settings.booksFolder = "Books"; plugin.settings.goodreadsRssUrl = ${JSON.stringify(fake.url + RSS_PATH)};`);
 	const planStep = (id) => cdp.eval(`window.__plan = await plugin.planStep(${JSON.stringify(id)}, ${endpoints}); return window.__plan;`);
-	const applyStep = (select = "") => cdp.eval(`${select}; return await plugin.applyStep(window.__plan);`);
+	const applyStep = (select = "") => cdp.eval(`${select}; return await plugin.applyStep(window.__plan, ${endpoints});`);
 	const backlog = () => readVaultFile(BACKLOG_PATH);
 	const rowOf = (id) => backlog().split("\n").find((line) => line.includes(`[${id}](`));
 
@@ -301,6 +358,55 @@ try {
 			&& finishedNote.includes("find all books in [[../List of books]]\n\n## Hardcover review\nLoved it.\n\n## My notes"),
 		finishedNote);
 	check("no step sent a mutation to Hardcover", hardcoverMutations.length === 0, hardcoverMutations.join("\n"));
+
+	// --- Hardcover-writing steps: push and labels, against the stateful fake
+	hardcoverScenario = writingHardcover;
+	await cdp.eval(`await app.vault.adapter.write(${JSON.stringify(BACKLOG_PATH)}, ${JSON.stringify(WRITING_BACKLOG)});
+		await app.vault.adapter.write(${JSON.stringify(LISTS_PATH)}, ${JSON.stringify(LISTS_FILE)});`);
+	const tick = (ids) => `window.__plan.changes.forEach((c) => (c.selected = ${JSON.stringify(ids)}.includes(c.id)))`;
+	const mutations = () => writing.mutations.map((m) => `${m.query} ${JSON.stringify(m.object)}`);
+
+	plan = await planStep("backlog/push");
+	const untouched = await applyStep();
+	check("push: plan offers the books with no Hardcover status, all unticked; applying it as is sends no mutation",
+		plan.changes.map((c) => `${c.id}:${c.selected}`).join() === "push:8001:false,push:8003:false" && writing.mutations.length === 0
+			&& untouched.applied.length === 0,
+		JSON.stringify({ changes: plan.changes.map((c) => [c.id, c.selected]), mutations: mutations() }));
+
+	const pushedResult = await applyStep(tick(["push:8001"]));
+	await applyStep();
+	check("push: the ticked book is added once with its date (also on a second apply), the unticked one never; edition link shown",
+		JSON.stringify(mutations()) === JSON.stringify([`InsertUserBook {"book_id":8001,"status_id":1,"date_added":"2026-10-02"}`])
+			&& pushedResult.messages.some((m) => m.includes("https://hardcover.app/books/pushed-book")),
+		JSON.stringify({ mutations: mutations(), pushedResult }));
+
+	plan = await planStep("labels/sync");
+	const labelIds = plan.changes.map((c) => c.id).join();
+	writing.failSlugOnce = true;
+	const interrupted = await applyStep(tick(["list:poetry", "push:poetry:8003", "push:sci-fi:8002", "pull:row:4000001:sci-fi"]));
+	const listsAfterFailure = readVaultFile(LISTS_PATH);
+	check("labels: plan pulls, pushes and a new list; a run cut off after creating the list records nothing for it and writes nothing more",
+		labelIds === "list:poetry,pull:row:4000001:sci-fi,push:sci-fi:8002,push:poetry:8003,push:sci-fi:8003,push:sci-fi:7001,push:sci-fi:7002"
+			&& JSON.stringify(mutations().slice(1)) === JSON.stringify(['InsertList {"name":"Poetry","privacy_setting_id":1}'])
+			&& interrupted.skipped.length === 3 && listsAfterFailure === LISTS_FILE
+			&& rowOf(4000001).includes("|  | Sci-Fi |  |"),
+		JSON.stringify({ labelIds, mutations: mutations(), interrupted }) + "\n" + listsAfterFailure);
+
+	plan = await planStep("labels/sync");
+	const link = plan.changes.find((c) => c.id === "list:poetry");
+	const relinked = await applyStep(tick(["list:poetry", "push:poetry:8003", "push:sci-fi:8002"]));
+	await applyStep();
+	check("labels: the retry links the list made before instead of creating it again; exactly the ticked books are pushed, once",
+		/Link your existing Hardcover list "Poetry" \(7201\)/.test(link?.summary ?? "")
+			&& JSON.stringify(mutations().slice(1)) === JSON.stringify([
+				'InsertList {"name":"Poetry","privacy_setting_id":1}',
+				'InsertListBook {"list_id":7101,"book_id":8002}',
+				'InsertListBook {"list_id":7201,"book_id":8003}',
+			])
+			&& writing.lists.filter((l) => l.name === "Poetry").length === 1
+			&& readVaultFile(LISTS_PATH).includes("| Sci-Fi | [7101](https://hardcover.app/lists/sci-fi) |\n| Poetry | [7201](https://hardcover.app/lists/poetry) |\n\nText below.")
+			&& relinked.applied.join() === "list:poetry,push:sci-fi:8002,push:poetry:8003",
+		JSON.stringify({ link: link?.summary, mutations: mutations(), relinked }) + "\n" + readVaultFile(LISTS_PATH));
 } catch (err) {
 	check("e2e run finished without an exception", false, err.stack ?? String(err));
 } finally {

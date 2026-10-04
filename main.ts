@@ -40,8 +40,9 @@ export default class BookSyncPlugin extends Plugin {
 		});
 	}
 
-	/** Writes the plan's ticked, ready changes */
-	async applyStep(plan: Plan): Promise<ApplyResult> {
-		return STEPS[plan.step].apply({ vault: obsidianVault(this.app), settings: this.settings }, selectedChanges(plan));
+	/** Writes the plan's ticked, ready changes. Only the push and labels steps use the Hardcover writer */
+	async applyStep(plan: Plan, endpoints?: Endpoints): Promise<ApplyResult> {
+		const ctx = { vault: obsidianVault(this.app), settings: this.settings, hardcover: this.clients(endpoints).hardcoverWriter };
+		return STEPS[plan.step].apply(ctx, selectedChanges(plan));
 	}
 }

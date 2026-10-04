@@ -6,14 +6,27 @@ import { DatabaseNote, readDatabaseNote } from "../core/databaseNote";
 import { extractId, goodreadsIdFromUrl } from "../core/idLinks";
 import { parseTable, Table, TableRow } from "../core/table";
 import type { GoodreadsClient } from "../api/goodreads";
-import type { HardcoverReader } from "../api/hardcover";
+import type { HardcoverReader, HardcoverWriter } from "../api/hardcover";
 import type { OpenAiClient } from "../api/openai";
 import { BookSyncSettings, booksPath } from "../settings";
 
 /** Hardcover reads the steps use. A reader, never a writer: plan() can't write by construction */
 export type HardcoverReads = Pick<
 	HardcoverReader,
-	"lookupIsbn" | "booksBySlug" | "resolveMerges" | "readingStatuses" | "userBookDetails" | "finishedInfo"
+	| "lookupIsbn"
+	| "booksBySlug"
+	| "resolveMerges"
+	| "readingStatuses"
+	| "userBookDetails"
+	| "finishedInfo"
+	| "trackedBooks"
+	| "myLists"
+	| "listBookIds"
+>;
+/** What the Hardcover-writing steps (push, labels) use in apply(): the writes, plus reads to re-check right before */
+export type HardcoverWrites = Pick<
+	HardcoverWriter,
+	"addWantToRead" | "createList" | "addListBook" | "finishedInfo" | "myLists" | "listBookIds"
 >;
 export type GoodreadsReads = Pick<GoodreadsClient, "fetchShelf">;
 export type LabelSuggester = Pick<OpenAiClient, "proposeLabels" | "refineLabels">;
@@ -26,17 +39,22 @@ export interface PlanContext {
 	openai: LabelSuggester;
 }
 
-/** The steps of this module write only local files */
+/** For steps that write only local files */
 export interface ApplyContext {
 	vault: VaultWriter;
 	settings: BookSyncSettings;
 }
 
-export interface Step<P = unknown> {
+/** For the steps that write to Hardcover (push, labels) */
+export interface WritingApplyContext extends ApplyContext {
+	hardcover: HardcoverWrites;
+}
+
+export interface Step<P = unknown, A extends ApplyContext = ApplyContext> {
 	id: StepId;
 	plan(ctx: PlanContext): Promise<Plan<P>>;
 	/** Gets only the ticked, ready changes (see selectedChanges) */
-	apply(ctx: ApplyContext, changes: Change<P>[]): Promise<ApplyResult>;
+	apply(ctx: A, changes: Change<P>[]): Promise<ApplyResult>;
 }
 
 export interface Paths {

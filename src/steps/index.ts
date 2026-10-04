@@ -1,18 +1,24 @@
 // Every step by id, in pipeline order (sync_books.py): backlog (pull -> link -> push), labels, archive
-// (promote -> reconcile -> finished). push and labels follow in step 5.
+// (promote -> reconcile -> finished). Every apply gets a WritingApplyContext; only push and labels use its writer.
 
 import type { StepId } from "../core/changes";
-import type { Step } from "./context";
+import type { Step, WritingApplyContext } from "./context";
 import { finished } from "./finished";
+import { labels } from "./labels";
 import { linkIds } from "./linkIds";
 import { promote } from "./promote";
 import { pullGoodreads } from "./pullGoodreads";
+import { push } from "./push";
 import { reconcile } from "./reconcile";
 
-export const STEPS: Record<StepId, Step<unknown>> = {
-	"backlog/pullGoodreads": pullGoodreads as Step<unknown>,
-	"backlog/linkIds": linkIds as Step<unknown>,
-	"archive/promote": promote as Step<unknown>,
-	"archive/reconcile": reconcile as Step<unknown>,
-	"archive/finished": finished as Step<unknown>,
+type AnyStep = Step<unknown, WritingApplyContext>;
+
+export const STEPS: Record<StepId, AnyStep> = {
+	"backlog/pullGoodreads": pullGoodreads as AnyStep,
+	"backlog/linkIds": linkIds as AnyStep,
+	"backlog/push": push as AnyStep,
+	"labels/sync": labels as AnyStep,
+	"archive/promote": promote as AnyStep,
+	"archive/reconcile": reconcile as AnyStep,
+	"archive/finished": finished as AnyStep,
 };

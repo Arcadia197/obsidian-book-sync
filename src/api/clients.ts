@@ -12,6 +12,8 @@ export interface Endpoints {
 	openai?: string;
 	/** Base of Goodreads book pages, e.g. "https://www.goodreads.com" */
 	goodreads?: string;
+	/** Hardcover pacing per request, only for the e2e test's fake server (the real API needs the default 1.1s) */
+	hardcoverIntervalMs?: number;
 }
 
 export interface Clients {
@@ -24,7 +26,13 @@ export interface Clients {
 }
 
 export function createClients(settings: BookSyncSettings, http: HttpFn, endpoints: Endpoints = {}, clock?: Clock): Clients {
-	const { reader, writer } = createHardcover({ token: settings.hardcoverToken, http, endpoint: endpoints.hardcover, clock });
+	const { reader, writer } = createHardcover({
+		token: settings.hardcoverToken,
+		http,
+		endpoint: endpoints.hardcover,
+		clock,
+		intervalMs: endpoints.hardcover ? endpoints.hardcoverIntervalMs : undefined,
+	});
 	const goodreadsBase = endpoints.goodreads?.replace(/\/+$/, "");
 	return {
 		hardcover: reader,

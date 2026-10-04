@@ -3,7 +3,14 @@
 // Files are reached through VaultReader/VaultWriter, so the steps run on Obsidian's vault, in memory (tests) or on
 // a read-only folder (parity script) alike.
 
-export type StepId = "backlog/pullGoodreads" | "backlog/linkIds" | "archive/promote" | "archive/reconcile" | "archive/finished";
+export type StepId =
+	| "backlog/pullGoodreads"
+	| "backlog/linkIds"
+	| "backlog/push"
+	| "labels/sync"
+	| "archive/promote"
+	| "archive/reconcile"
+	| "archive/finished";
 
 /** An editable field next to a change: labels for a new row, a pasted Hardcover link, a Goodreads id */
 export interface ChangeInput {

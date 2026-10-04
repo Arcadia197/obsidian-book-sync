@@ -1,5 +1,5 @@
 // Synthetic Books folder and stub clients for the step tests. All names and ids are made up.
-import type { ApplyContext, PlanContext } from "../src/steps/context";
+import type { PlanContext, WritingApplyContext } from "../src/steps/context";
 import { DEFAULT_SETTINGS, BookSyncSettings } from "../src/settings";
 import { renderRow } from "../src/core/table";
 import { goodreadsLink, hardcoverLink } from "../src/core/idLinks";
@@ -94,16 +94,44 @@ const unexpected = (name: string) => async () => {
 	throw new Error(`unexpected call: ${name}`);
 };
 
-/** A plan context whose clients throw unless the test overrides the methods it expects */
+/**
+ * A plan context whose clients throw unless the test overrides the methods it expects. `writer` is what apply() gets
+ * as its Hardcover client (push, labels); `writes` records every Hardcover write it made
+ */
 export function context(vault: MemoryVault, overrides: {
 	hardcover?: Partial<PlanContext["hardcover"]>;
+	writer?: Partial<WritingApplyContext["hardcover"]>;
 	goodreads?: Partial<PlanContext["goodreads"]>;
 	openai?: Partial<PlanContext["openai"]>;
 	settings?: Partial<BookSyncSettings>;
-} = {}): PlanContext & ApplyContext & { vault: MemoryVault } {
+} = {}): PlanContext & { vault: MemoryVault; apply: WritingApplyContext & { vault: MemoryVault }; writes: string[] } {
+	const settings = { ...SETTINGS, ...overrides.settings };
+	const writes: string[] = [];
 	return {
 		vault,
-		settings: { ...SETTINGS, ...overrides.settings },
+		settings,
+		writes,
+		apply: {
+			vault,
+			settings,
+			hardcover: {
+				addWantToRead: async (bookId, dateAdded) => {
+					writes.push(`addWantToRead ${bookId} ${dateAdded ?? "-"}`);
+					return { id: 1, error: null };
+				},
+				createList: async (name) => {
+					writes.push(`createList ${name}`);
+					return { id: 900, name, slug: name.toLowerCase() };
+				},
+				addListBook: async (listId, bookId) => {
+					writes.push(`addListBook ${listId} ${bookId}`);
+				},
+				finishedInfo: unexpected("finishedInfo"),
+				myLists: unexpected("myLists"),
+				listBookIds: unexpected("listBookIds"),
+				...overrides.writer,
+			},
+		},
 		hardcover: {
 			lookupIsbn: unexpected("lookupIsbn"),
 			booksBySlug: unexpected("booksBySlug"),
@@ -111,6 +139,9 @@ export function context(vault: MemoryVault, overrides: {
 			readingStatuses: unexpected("readingStatuses"),
 			userBookDetails: unexpected("userBookDetails"),
 			finishedInfo: unexpected("finishedInfo"),
+			trackedBooks: unexpected("trackedBooks"),
+			myLists: unexpected("myLists"),
+			listBookIds: unexpected("listBookIds"),
 			...overrides.hardcover,
 		},
 		goodreads: { fetchShelf: unexpected("fetchShelf"), ...overrides.goodreads },
