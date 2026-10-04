@@ -18,6 +18,8 @@ export interface ChangeInput {
 	/** What to enter, for the review window */
 	prompt: string;
 	value: string;
+	/** The values allowed (labels: the vocabulary), for suggestions in the review window */
+	options?: string[];
 }
 
 export interface Change<P = unknown> {
@@ -34,6 +36,10 @@ export interface Change<P = unknown> {
 	/** False while the change still waits for input; apply() skips it */
 	ready: boolean;
 	input?: ChangeInput;
+	/** Id of a change in the same plan this one can't do without (a push into a list the plan creates) */
+	requires?: string;
+	/** Vault path of the note this change is about, for a link in the review window */
+	file?: string;
 	/** Step-specific; only apply() reads it */
 	payload: P;
 }
@@ -43,6 +49,8 @@ export interface Plan<P = unknown> {
 	changes: Change<P>[];
 	/** Report lines that need no decision: already archived, can't check, still reading */
 	notes: string[];
+	/** Lines worth a look before applying, shown prominently (labels: backlog rows with no Labels yet) */
+	attention?: string[];
 }
 
 export interface ApplyResult {

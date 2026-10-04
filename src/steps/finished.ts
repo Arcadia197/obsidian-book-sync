@@ -76,6 +76,7 @@ export async function planFinished(ctx: PlanContext): Promise<Plan<FinishedPaylo
 			writesHardcover: false,
 			selected: true,
 			ready: true,
+			file: note.path,
 			payload: { kind: "finished", path: note.path, dateRead: info.first_read_date, rating10, review },
 		});
 	}

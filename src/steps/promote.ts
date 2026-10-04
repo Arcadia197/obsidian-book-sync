@@ -95,6 +95,7 @@ export async function planPromote(ctx: PlanContext): Promise<Plan<PromotePayload
 				writesHardcover: false,
 				selected: true,
 				ready: true,
+				file: existing.note.path,
 				payload: { kind: "removeRow", key: rowKey(row) },
 			});
 			continue;

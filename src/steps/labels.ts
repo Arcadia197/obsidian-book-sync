@@ -94,6 +94,10 @@ async function readMapping(vault: { read(path: string): Promise<string | null> }
 	return { text, mapping };
 }
 
+function noteFile(target: LabelTarget): string | undefined {
+	return target.kind === "note" ? target.path : undefined;
+}
+
 /** List ids that Hardcover Lists.md records with a blank Label: "leave this list alone" */
 function ignoredListIds(mapping: ListsMapping): Set<number> {
 	const ids = new Set<number>();
@@ -254,6 +258,7 @@ export async function planLabels(ctx: PlanContext): Promise<Plan<LabelsPayload>>
 			summary: `Add ${source.name} to the Hardcover list "${info.label}"`,
 			details: [],
 			warnings: pending ? [`Needs its list item ticked too (the list isn't in Hardcover Lists.md yet)`] : [],
+			requires: listChanges.some((c) => c.id === `list:${key}`) ? `list:${key}` : undefined,
 			writesHardcover: true,
 			selected: false,
 			ready: true,
@@ -279,6 +284,7 @@ export async function planLabels(ctx: PlanContext): Promise<Plan<LabelsPayload>>
 				writesHardcover: false,
 				selected: true,
 				ready: true,
+				file: noteFile(entry.target),
 				payload: { kind: "pull", target: entry.target, field: "labels", value: info.label, name: entry.name },
 			});
 		}
@@ -311,6 +317,7 @@ export async function planLabels(ctx: PlanContext): Promise<Plan<LabelsPayload>>
 					writesHardcover: false,
 					selected: true,
 					ready: true,
+					file: noteFile(entry.target),
 					payload: { kind: "pull", target: entry.target, field: "owned", value: owner, name: entry.name },
 				});
 			}
@@ -328,6 +335,7 @@ export async function planLabels(ctx: PlanContext): Promise<Plan<LabelsPayload>>
 		writesHardcover: false,
 		selected: true,
 		ready: true,
+		file: path,
 		payload: { kind: "strip", path },
 	}));
 
@@ -349,7 +357,9 @@ export async function planLabels(ctx: PlanContext): Promise<Plan<LabelsPayload>>
 	section(`Rows whose cell count doesn't match the header (a stray "|"?), skipped. Fix them by hand:`, malformed);
 	section("Hardcover Lists.md rows with a label but no readable list id (no list created for them, fix the row):", mapping.unreadable.map((l) => `  - ${l}`));
 	section("Labels left alone (their list is marked to be left alone):", leftAlone);
-	section("Backlog rows with no Labels yet (they sync nothing; worth a look before applying):", blankLabels);
+	if (blankLabels.length) {
+		plan.attention = ["Backlog rows with no Labels yet (they sync nothing; worth a look before applying):", ...blankLabels];
+	}
 	if (!plan.changes.length) {
 		plan.notes.push("Nothing to sync: no changes in either direction.");
 	}

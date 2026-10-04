@@ -132,7 +132,9 @@ test("plan: pulls, pushes (one per list and book), owned field, strays, merges, 
 	assert.match(text, /Row D \(Dan\) \(labels: Sci-Fi\)/);
 	assert.match(text, /Cat - Three/);
 	assert.match(text, /Wishlist: your list "wishlist" has a blank Label/);
-	assert.match(text, /no Labels yet[\s\S]*Row B \(Ben\)/);
+	assert.match(plan.attention!.join("\n"), /no Labels yet[\s\S]*Row B \(Ben\)/);
+	assert.equal(byId.get("push:poetry:3")!.requires, "list:poetry", "a push into a new list needs the list change");
+	assert.equal(byId.get(`pull:${notes.n2}:owned`)!.file, notes.n2, "a change about a note links it");
 	assert.deepEqual(hc.writes, []);
 	assert.deepEqual(vault.writes, []);
 	assert.deepEqual(Object.fromEntries(vault.files), files);

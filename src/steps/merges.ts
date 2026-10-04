@@ -27,6 +27,7 @@ export function mergeChange(note: DatabaseNote, merged: BookRef): Change<MergePa
 		writesHardcover: false,
 		selected: true,
 		ready: true,
+		file: note.path,
 		payload: { kind: "merge", path: note.path, oldId: note.hardcoverId ?? "", newId: merged.id, slug: merged.slug },
 	};
 }

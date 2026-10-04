@@ -64,6 +64,7 @@ export async function planReconcile(ctx: PlanContext): Promise<Plan<RemoveRowPay
 			writesHardcover: false,
 			selected: true,
 			ready: true,
+			file: notePath,
 			payload: { key: rowKey(row) },
 		});
 	}

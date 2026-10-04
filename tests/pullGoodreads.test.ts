@@ -123,6 +123,7 @@ test("labels: suggested from the vocabulary with the guidance, refined from feed
 	});
 	const plan = await planPull(ctx);
 	assert.equal(plan.changes[0].input?.value, "Sci-Fi");
+	assert.ok(plan.changes[0].input?.options?.includes("Sci-Fi"), "the vocabulary rides along for suggestions in the review window");
 	assert.deepEqual(calls[0], { entries: [{ id: "50", title: "Brand New", author: "Nia" }], vocabulary: ["Sci-Fi", "classics", "essays"], guidance: "Sci-Fi is only space stuff." });
 
 	plan.changes[0].input!.value = "Sci-Fi, classics";

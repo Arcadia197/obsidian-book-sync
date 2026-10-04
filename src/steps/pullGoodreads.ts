@@ -69,11 +69,12 @@ function isSorted(table: Table): boolean {
 	return table.rows.every((row, i) => i === 0 || (table.rows[i - 1].cells["DateAdded"] ?? "") >= (row.cells["DateAdded"] ?? ""));
 }
 
-function labelsInput(value: string) {
+function labelsInput(value: string, vocabulary: string[]) {
 	return {
 		kind: "labels" as const,
 		prompt: "Labels (comma-separated, from the labels already used in Database/)",
 		value,
+		options: vocabulary,
 	};
 }
 
@@ -118,7 +119,7 @@ export async function planPull(ctx: PlanContext, options: PullOptions = {}): Pro
 				writesHardcover: false,
 				selected: true,
 				ready: true,
-				input: labelsInput(""),
+				input: labelsInput("", vocabularyList),
 				payload: { kind: "add", entry, vocabulary: vocabularyList },
 			};
 			added.push(change);
