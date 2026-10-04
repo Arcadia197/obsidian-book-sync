@@ -340,7 +340,8 @@ export class HardcoverWriter extends HardcoverReader {
 	/**
 	 * Adds a book as Want to Read (status 1). Never call it for a book that already has any status: Hardcover owns
 	 * status. Sets no edition, like the Python; the caller reminds the user to pick one.
-	 * Schemas/UserBooks.mdx; UserBookCreateInput (introspection 2026-10-04) also has `edition_id`, unused so far
+	 * Schemas/UserBooks.mdx; UserBookCreateInput (introspection 2026-10-04) also has `edition_id`, left out on purpose:
+	 * the user picks the edition by hand (the backlog's Goodreads isbn is an arbitrary edition)
 	 */
 	async addWantToRead(bookId: number, dateAdded?: string): Promise<InsertResult> {
 		const object: Record<string, unknown> = { book_id: bookId, status_id: 1 };
