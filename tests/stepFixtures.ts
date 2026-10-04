@@ -144,7 +144,7 @@ export function context(vault: MemoryVault, overrides: {
 			listBookIds: unexpected("listBookIds"),
 			...overrides.hardcover,
 		},
-		goodreads: { fetchShelf: unexpected("fetchShelf"), ...overrides.goodreads },
+		goodreads: { fetchShelf: unexpected("fetchShelf"), fetchBook: unexpected("fetchBook"), ...overrides.goodreads },
 		openai: { proposeLabels: unexpected("proposeLabels"), refineLabels: unexpected("refineLabels"), ...overrides.openai },
 	};
 }

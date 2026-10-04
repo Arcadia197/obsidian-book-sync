@@ -81,6 +81,13 @@ export const STEP_INFO: Record<StepId, StepInfo> = {
 		desc: "Notes of books you finished on Hardcover get dateRead, your rating and your review. Hardcover wins for these.",
 		loading: "Checking notes with a blank dateRead",
 	},
+	"backlog/addBook": {
+		name: "Add to Want to Read",
+		short: "Add",
+		phase: "backlog",
+		desc: "One Goodreads book as a new row in Want to Read.",
+		loading: "Reading the Goodreads page",
+	},
 };
 
 export function phaseOf(id: StepId): PhaseInfo {

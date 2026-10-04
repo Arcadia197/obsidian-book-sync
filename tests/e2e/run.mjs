@@ -161,6 +161,8 @@ try {
 	cdp = await launchObsidian();
 	await cdp.eval(`app.plugins.setEnable(true); await app.plugins.enablePluginAndSave(${JSON.stringify(PLUGIN_ID)});`);
 	await cdp.waitFor(`app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}]?.settings`);
+	// Obsidian asks whether to trust a vault opened for the first time; the dialog would hold the keyboard focus
+	await cdp.eval(`[...document.querySelectorAll(".mod-trust-folder button")].find((b) => b.textContent.startsWith("Trust author"))?.click();`);
 	const pluginData = () => JSON.parse(readVaultFile(`.obsidian/plugins/${PLUGIN_ID}/data.json`));
 	const reload = async () => {
 		await cdp.eval(`await app.plugins.disablePlugin(${JSON.stringify(PLUGIN_ID)}); await app.plugins.enablePlugin(${JSON.stringify(PLUGIN_ID)});`);
@@ -505,6 +507,33 @@ try {
 	await waitUi(`root?.querySelector(".book-sync-full")`);
 	check("view: opened again, it shows the start page, not the ended run",
 		await ui(`return !root.querySelector(".book-sync-card") && root.querySelectorAll(".book-sync-phase").length === 3;`));
+
+	// "Add to Want to Read": the command focuses the field; the looked-up row shows as a card before it's added
+	queue.openai.push({ status: 200, body: { choices: [{ message: { content: JSON.stringify({ "2000001": ["Sci-Fi"] }) } }] } });
+	await cdp.eval(`app.commands.executeCommandById("${PLUGIN_ID}:add-to-want-to-read");`);
+	await waitUi(`root?.querySelector('[data-focus-id="add-book"]')`);
+	const focused = await ui(`await pause(100); const a = document.activeElement;
+		return a === root.querySelector('[data-focus-id="add-book"]') || a.tagName + "." + a.className + " in: " + a.closest(".modal, .modal-container, .workspace-leaf, .prompt")?.className + " text: " + a.closest(".modal, .modal-container, .prompt")?.textContent.slice(0, 200);`);
+	await ui(`const field = root.querySelector('[data-focus-id="add-book"]');
+		field.value = "https://www.goodreads.com/book/show/2000001-the-salt"; field.dispatchEvent(new Event("input")); button("Look up").click();`);
+	await waitUi(`card("add:2000001")`);
+	const looked = await ui(`return { chips: [...card("add:2000001").querySelectorAll(".book-sync-chip")].map((c) => c.textContent),
+		summary: card("add:2000001").querySelector(".book-sync-summary").textContent };`);
+	const beforeAdd = backlog();
+	await ui(`button("Add to Want to Read").click();`);
+	await waitUi(`button("Add another")`);
+	const today = await cdp.eval(`const d = new Date(); return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, "0"), String(d.getDate()).padStart(2, "0")].join("-");`);
+	check("view: Add to Want to Read focuses the field, shows the book with suggested labels, and adds it with today's date",
+		focused === true && looked.chips.join() === "Sci-Fi" && /The Salt & the Sea/.test(looked.summary) && beforeAdd === backlog().replace(rowOf(2000001) + "\n", "")
+			&& rowOf(2000001)?.startsWith(`| The Salt & the Sea: Sailor's Tales |`) && rowOf(2000001).includes(`| ${today} |  | Sci-Fi |`),
+		JSON.stringify({ focused, looked, row: rowOf(2000001) }));
+
+	await ui(`button("Add another").click(); await pause(50); const field = root.querySelector('[data-focus-id="add-book"]');
+		field.value = "2000001"; field.dispatchEvent(new Event("input")); button("Look up").click();`);
+	await waitUi(`button("Try another")`);
+	const dupe = await ui(`return root.querySelector(".book-sync-add").textContent;`);
+	check("view: a book already in Want to Read is refused before anything is written",
+		/Already in Want to Read: The Salt & the Sea/.test(dupe) && backlog().split("[2000001](").length === 2, dupe);
 } catch (err) {
 	check("e2e run finished without an exception", false, err.stack ?? String(err));
 } finally {

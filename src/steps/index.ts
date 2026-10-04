@@ -2,6 +2,7 @@
 // (promote -> reconcile -> finished). Every apply gets a WritingApplyContext; only push and labels use its writer.
 
 import type { StepId } from "../core/changes";
+import { addBook } from "./addBook";
 import type { Step, WritingApplyContext } from "./context";
 import { finished } from "./finished";
 import { labels } from "./labels";
@@ -21,4 +22,5 @@ export const STEPS: Record<StepId, AnyStep> = {
 	"archive/promote": promote as AnyStep,
 	"archive/reconcile": reconcile as AnyStep,
 	"archive/finished": finished as AnyStep,
+	"backlog/addBook": addBook as AnyStep,
 };

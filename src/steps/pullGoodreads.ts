@@ -69,7 +69,8 @@ function isSorted(table: Table): boolean {
 	return table.rows.every((row, i) => i === 0 || (table.rows[i - 1].cells["DateAdded"] ?? "") >= (row.cells["DateAdded"] ?? ""));
 }
 
-function labelsInput(value: string, vocabulary: string[]) {
+/** The Labels field of a new row; the vocabulary rides along for suggestions */
+export function labelsInput(value: string, vocabulary: string[]) {
 	return {
 		kind: "labels" as const,
 		prompt: "Labels (comma-separated, from the labels already used in Database/)",
@@ -190,7 +191,8 @@ async function guidance(ctx: PlanContext): Promise<string> {
 	return text ? labelGuidance(text) : "";
 }
 
-async function suggestLabels(ctx: PlanContext, added: Change<PullPayload>[], vocabulary: Vocabulary, notes: string[]): Promise<void> {
+/** Fills the Labels field of new rows from an AI suggestion; why there is none goes into `notes` */
+export async function suggestLabels(ctx: PlanContext, added: Change<PullPayload>[], vocabulary: Vocabulary, notes: string[]): Promise<void> {
 	if (!ctx.settings.openaiKey) {
 		notes.push("No OpenAI API key set: no label suggestions, fill in Labels by hand.");
 		return;

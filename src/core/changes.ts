@@ -10,7 +10,9 @@ export type StepId =
 	| "labels/sync"
 	| "archive/promote"
 	| "archive/reconcile"
-	| "archive/finished";
+	| "archive/finished"
+	/** One book from its Goodreads page, outside the pipeline (start page, command) */
+	| "backlog/addBook";
 
 /** An editable field next to a change: labels for a new row, a pasted Hardcover link, a Goodreads id */
 export interface ChangeInput {

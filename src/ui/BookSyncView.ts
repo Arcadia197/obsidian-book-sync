@@ -4,7 +4,7 @@
 
 import { ItemView, Notice, Platform, setIcon, WorkspaceLeaf } from "obsidian";
 import type BookSyncPlugin from "../../main";
-import type { Change, Plan, StepId } from "../core/changes";
+import type { ApplyResult, Change, Plan, StepId } from "../core/changes";
 import { selectedChanges } from "../core/changes";
 import { SessionEntry, SyncSession, tally } from "../run/session";
 import { FULL_SYNC, PHASES, STEP_INFO } from "../run/stepInfo";
@@ -20,11 +20,19 @@ export class BookSyncView extends ItemView {
 	private bodyEl!: HTMLElement;
 	private footEl!: HTMLElement;
 	/** Phone cards whose details are unfolded */
-	private open = new Set<string>();
+	private unfolded = new Set<string>();
 	/** Steps whose "nothing to do" was already announced */
 	private announced = new Set<SessionEntry>();
 	private refineText = "";
 	private refining = false;
+	/** The start page's "Add a book" box */
+	private add: { status: "idle" | "looking" | "found" | "adding" | "done"; value: string; plan: Plan | null; error: string; result: ApplyResult | null } = {
+		status: "idle",
+		value: "",
+		plan: null,
+		error: "",
+		result: null,
+	};
 
 	constructor(leaf: WorkspaceLeaf, private readonly plugin: BookSyncPlugin) {
 		super(leaf);
@@ -72,13 +80,26 @@ export class BookSyncView extends ItemView {
 		this.plugin.setStatus("");
 	}
 
+	/** The "Add to Want to Read" command: the start page with the add field focused */
+	focusAddBook(): void {
+		if (this.session && !this.session.ended && !this.session.finished) {
+			new Notice("A sync is running in the Book Sync tab. Finish or end it, then add the book.");
+			return;
+		}
+		this.session = null;
+		if (this.add.status === "done") {
+			this.add = { status: "idle", value: "", plan: null, error: "", result: null };
+		}
+		this.render("add-book");
+	}
+
 	/** Starts a run of `steps`, unless one is already waiting for the user */
 	startRun(steps: StepId[]): void {
 		if (this.session && !this.session.ended && !this.session.finished) {
 			new Notice("A sync is already running in the Book Sync tab. End it first.");
 			return;
 		}
-		this.open.clear();
+		this.unfolded.clear();
 		this.announced.clear();
 		this.refineText = "";
 		this.session = new SyncSession(steps, { plan: (id) => this.plugin.planStep(id), apply: (plan) => this.plugin.applyStep(plan) }, () =>
@@ -120,6 +141,11 @@ export class BookSyncView extends ItemView {
 
 	private render(focusId?: string): void {
 		this.ensureDom();
+		// A re-render keeps the focus on the field that had it
+		const active = document.activeElement;
+		if (!focusId && active instanceof HTMLElement && this.contentEl.contains(active)) {
+			focusId = active.dataset.focusId;
+		}
 		const scroll = this.bodyEl.scrollTop;
 		this.railEl.empty();
 		this.bodyEl.empty();
@@ -189,6 +215,118 @@ export class BookSyncView extends ItemView {
 			const run = row.createEl("button", { text: "Run" });
 			run.addEventListener("click", () => this.startRun(phase.steps));
 		}
+
+		inner.createDiv({ cls: "book-sync-label", text: "Add a book" });
+		this.renderAddBook(inner.createDiv({ cls: "book-sync-add" }));
+	}
+
+	private renderAddBook(box: HTMLElement): void {
+		const add = this.add;
+		const reset = () => {
+			this.add = { status: "idle", value: "", plan: null, error: "", result: null };
+			this.render("add-book");
+		};
+		if (add.status === "idle" || add.status === "looking") {
+			const row = box.createDiv({ cls: "book-sync-add-row" });
+			const field = row.createEl("input", {
+				type: "text",
+				cls: "book-sync-text",
+				attr: { placeholder: "Goodreads link or id", autocomplete: "off", autocapitalize: "off", spellcheck: "false", inputmode: "url" },
+			});
+			field.dataset.focusId = "add-book";
+			field.value = add.value;
+			field.disabled = add.status === "looking";
+			const button = row.createEl("button", { text: add.status === "looking" ? "Looking up…" : "Look up" });
+			button.disabled = add.status === "looking";
+			const lookUp = async () => {
+				if (this.add.status !== "idle") return;
+				if (!add.value.trim()) {
+					add.error = "Paste a Goodreads link or id first.";
+					this.render("add-book");
+					return;
+				}
+				add.status = "looking";
+				add.error = "";
+				this.render();
+				try {
+					add.plan = await this.plugin.planAddBook(add.value);
+					add.status = "found";
+				} catch (err) {
+					add.status = "idle";
+					add.error = (err as Error).message;
+				}
+				if (this.add === add) this.render(add.status === "idle" ? "add-book" : undefined);
+			};
+			field.addEventListener("input", () => (add.value = field.value));
+			field.addEventListener("keydown", (event) => {
+				if (event.key === "Enter" && !event.isComposing) void lookUp();
+			});
+			button.addEventListener("click", () => void lookUp());
+			box.createEl("p", {
+				cls: add.error ? "book-sync-error" : "book-sync-muted",
+				text: add.error || "For a book that isn't on your Goodreads shelf. Shows the row before anything is added.",
+			});
+			return;
+		}
+		const plan = add.plan!;
+		if (add.status === "done") {
+			const body = this.box(box, "is-ok", "check");
+			body.createEl("b", { text: `Added ${plan.changes[0]?.summary.replace(/^Add /, "") ?? "the book"} to Want to Read.` });
+			this.lines(body, add.result?.messages ?? []);
+			const actions = body.createDiv({ cls: "book-sync-actions" });
+			this.fileLink(actions, booksPath(this.plugin.settings, this.plugin.settings.wantToReadFile), "Open Want to Read");
+			actions.createEl("button", { text: "Add another" }).addEventListener("click", reset);
+			return;
+		}
+		if (!plan.changes.length) {
+			const body = this.box(box, "is-warning", "alert-triangle");
+			this.lines(body, plan.notes);
+			body.createDiv({ cls: "book-sync-actions" }).createEl("button", { text: "Try another" }).addEventListener("click", reset);
+			return;
+		}
+		const change = plan.changes[0];
+		const host: CardHost = {
+			editable: add.status === "found",
+			compact: false,
+			result: null,
+			isOpen: () => true,
+			toggleOpen: () => {},
+			setSelected: (c, selected) => {
+				c.selected = selected;
+				this.render();
+			},
+			refresh: (focusId) => this.render(focusId),
+			resolveLink: () => Promise.resolve(""),
+			fileLink: (parent, path, text) => this.fileLink(parent, path, text),
+		};
+		renderCard(box, change, host);
+		if (plan.notes.length) {
+			this.lines(box.createDiv({ cls: "book-sync-muted" }), plan.notes);
+		}
+		const actions = box.createDiv({ cls: "book-sync-actions" });
+		const confirm = actions.createEl("button", { cls: "mod-cta", text: add.status === "adding" ? "Adding…" : "Add to Want to Read" });
+		confirm.disabled = add.status === "adding" || !change.selected;
+		const cancel = actions.createEl("button", { text: "Cancel" });
+		cancel.disabled = add.status === "adding";
+		cancel.addEventListener("click", reset);
+		confirm.addEventListener("click", async () => {
+			if (this.add.status !== "found") return;
+			add.status = "adding";
+			this.render();
+			try {
+				add.result = await this.plugin.applyStep(plan);
+				add.status = "done";
+				const skipped = add.result.skipped[0];
+				if (skipped) {
+					add.status = "found";
+					new Notice(`Not added: ${skipped.reason}`);
+				}
+			} catch (err) {
+				add.status = "found";
+				new Notice(`Adding failed: ${(err as Error).message}`);
+			}
+			if (this.add === add) this.render();
+		});
 	}
 
 	private renderRail(session: SyncSession): void {
@@ -432,9 +570,9 @@ export class BookSyncView extends ItemView {
 			editable: entry.status === "review",
 			compact: Platform.isPhone,
 			result: entry.result,
-			isOpen: (id) => this.open.has(id),
+			isOpen: (id) => this.unfolded.has(id),
 			toggleOpen: (id) => {
-				if (!this.open.delete(id)) this.open.add(id);
+				if (!this.unfolded.delete(id)) this.unfolded.add(id);
 				this.render();
 			},
 			setSelected: (change, selected) => {

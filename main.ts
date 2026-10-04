@@ -7,6 +7,7 @@ import { FULL_SYNC, PHASES } from "./src/run/stepInfo";
 import { BookSyncSettings, mergeSettings, migrateSecretNames } from "./src/settings";
 import { STEPS } from "./src/steps";
 import type { PlanContext } from "./src/steps/context";
+import { planAddBook } from "./src/steps/addBook";
 import { LinkPayload, resolveLinkInput } from "./src/steps/linkIds";
 import { PullPayload, refinePullLabels } from "./src/steps/pullGoodreads";
 import { BookSyncView, VIEW_TYPE } from "./src/ui/BookSyncView";
@@ -31,6 +32,7 @@ export default class BookSyncPlugin extends Plugin {
 		this.addRibbonIcon("library", "Open Book Sync", () => this.openView());
 		this.addCommand({ id: "open", name: "Open", callback: () => this.openView() });
 		this.addCommand({ id: "full-sync", name: "Full sync", callback: () => this.startRun(FULL_SYNC) });
+		this.addCommand({ id: "add-to-want-to-read", name: "Add to Want to Read", callback: async () => (await this.openView()).focusAddBook() });
 		for (const phase of PHASES) {
 			this.addCommand({ id: `sync-${phase.id}`, name: `Sync ${phase.name.toLowerCase()}`, callback: () => this.startRun(phase.steps) });
 		}
@@ -72,6 +74,11 @@ export default class BookSyncPlugin extends Plugin {
 	async applyStep(plan: Plan, endpoints = this.endpoints): Promise<ApplyResult> {
 		const ctx = { vault: obsidianVault(this.app), settings: this.settings, hardcover: this.clients(endpoints).hardcoverWriter };
 		return STEPS[plan.step].apply(ctx, selectedChanges(plan));
+	}
+
+	/** "Add a book": the row a Goodreads link or id would become. Reads only */
+	planAddBook(idOrUrl: string): Promise<Plan> {
+		return planAddBook(this.planContext(), idOrUrl);
 	}
 
 	/** The review window's "refine" box: revises every new row's Labels from plain-language feedback */

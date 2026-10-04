@@ -28,7 +28,7 @@ export type HardcoverWrites = Pick<
 	HardcoverWriter,
 	"addWantToRead" | "createList" | "addListBook" | "finishedInfo" | "myLists" | "listBookIds"
 >;
-export type GoodreadsReads = Pick<GoodreadsClient, "fetchShelf">;
+export type GoodreadsReads = Pick<GoodreadsClient, "fetchShelf" | "fetchBook">;
 export type LabelSuggester = Pick<OpenAiClient, "proposeLabels" | "refineLabels">;
 
 export interface PlanContext {
