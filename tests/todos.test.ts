@@ -80,3 +80,11 @@ test("doneTodos: local checks every time, remote ones when given; errors keep th
 	};
 	assert.deepEqual([...(await doneTodos(todos, offline))], [], "nothing goes away because a check failed");
 });
+
+test("regression: a blank owned is a valid answer, never a to-do; a cut-off shelf feed proves nothing", async () => {
+	assert.deepEqual(noteFieldsTodo("DB/A.md", "A", ["owned"]), []);
+	assert.equal(noteFieldsTodo("DB/A.md", "A", ["medium", "owned"])[0].text, "A: fill medium");
+	const shelf = [todo("shelf:5", "s5", { check: { kind: "offShelf", goodreadsId: "5" } })];
+	const checks: TodoChecks = { readNote: async () => null, rowLabels: async () => null, shelfIds: async () => null };
+	assert.deepEqual([...(await doneTodos(shelf, checks))], [], "a full page of the feed (null) keeps the reminder");
+});

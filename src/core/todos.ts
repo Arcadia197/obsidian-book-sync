@@ -15,12 +15,12 @@ export type TodoCheck =
 	/** Done when the book is no longer on the Goodreads shelf of the RSS URL (to-read) */
 	| { kind: "offShelf"; goodreadsId: string };
 
-/** "Still needs by hand" names that aren't frontmatter fields */
-const NOT_FIELDS = /^edition\b/;
+/** "Still needs by hand" names that aren't to-dos: no frontmatter field, or blank is a valid answer (nobody owns it) */
+const NOT_TODOS = /^(edition\b|owned$)/;
 
 /** The note-fields item for a note's still-needed fields, or none */
 export function noteFieldsTodo(path: string, name: string, stillNeeded: string[]): Todo[] {
-	const fields = stillNeeded.filter((f) => !NOT_FIELDS.test(f));
+	const fields = stillNeeded.filter((f) => !NOT_TODOS.test(f));
 	return fields.length ? [{ key: `fields:${path}`, text: `${name}: fill ${fields.join(", ")}`, file: path, check: { kind: "noteFields", path, fields } }] : [];
 }
 
@@ -111,8 +111,8 @@ export interface TodoChecks {
 	rowLabels(goodreadsId: string): Promise<string | null>;
 	/** Of these Hardcover book ids, the ones on your shelves with an edition picked, and the ones on your shelves */
 	editions?(bookIds: number[]): Promise<{ picked: Set<number>; tracked: Set<number> }>;
-	/** Goodreads ids on the to-read shelf */
-	shelfIds?(): Promise<Set<string>>;
+	/** Goodreads ids on the to-read shelf; null when the feed may be cut off (a full page), so absence proves nothing */
+	shelfIds?(): Promise<Set<string> | null>;
 }
 
 /**
@@ -152,8 +152,8 @@ export async function doneTodos(todos: Todo[], checks: TodoChecks): Promise<Set<
 	if (shelfTodos.length && checks.shelfIds) {
 		try {
 			const onShelf = await checks.shelfIds();
-			for (const todo of shelfTodos) {
-				if (!onShelf.has((todo.check as { goodreadsId: string }).goodreadsId)) done.add(todo.key);
+			for (const todo of onShelf ? shelfTodos : []) {
+				if (!onShelf!.has((todo.check as { goodreadsId: string }).goodreadsId)) done.add(todo.key);
 			}
 		} catch {
 			// kept

@@ -82,8 +82,7 @@ export default class BookSyncPlugin extends Plugin {
 	 * and Goodreads shelf updated (asked online at most every 10 minutes). Returns how many went. Errors keep items.
 	 */
 	async checkTodos(): Promise<number> {
-		const saved = await this.loadData();
-		this.todos = parseTodos(saved?.todos);
+		// Another device's changes arrive through onExternalSettingsChange; reloading here could drop items added meanwhile
 		if (!this.todos.length) {
 			return 0;
 		}
@@ -103,7 +102,11 @@ export default class BookSyncPlugin extends Plugin {
 			const clients = this.clients();
 			if (this.settings.hardcoverToken) checks.editions = (ids) => clients.hardcover.shelfEditions(ids);
 			if (this.settings.goodreadsRssUrl) {
-				checks.shelfIds = async () => new Set((await clients.goodreads.fetchShelf(this.settings.goodreadsRssUrl)).map((e) => e.goodreadsId));
+				checks.shelfIds = async () => {
+					const shelf = await clients.goodreads.fetchShelf(this.settings.goodreadsRssUrl);
+					// The feed may stop at a page of 100: then a missing book can still be on the shelf
+					return shelf.length >= 100 ? null : new Set(shelf.map((e) => e.goodreadsId));
+				};
 			}
 		}
 		const done = await doneTodos(this.todos, checks);

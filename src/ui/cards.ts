@@ -23,10 +23,12 @@ export interface CardHost {
 	fileLink(parent: HTMLElement, path: string, text: string): void;
 }
 
-/** Last lookup message per change id, so a re-render keeps it */
-const lookupMessages = new Map<string, { text: string; ok: boolean }>();
-const lookupTimers = new Map<string, number>();
-const lookupRuns = new Map<string, number>();
+// Per change object (not id), so a new plan of the same step starts clean
+/** Last lookup message, so a re-render keeps it */
+const lookupMessages = new WeakMap<Change, { text: string; ok: boolean }>();
+const lookupTimers = new WeakMap<Change, number>();
+/** Counts edits of the field; a lookup answer counts only if nothing was typed since it started */
+const lookupRuns = new WeakMap<Change, number>();
 
 export function renderCard(parent: HTMLElement, change: Change, host: CardHost): HTMLElement {
 	const card = parent.createDiv({ cls: "book-sync-card" });
@@ -146,21 +148,21 @@ function renderInput(parent: HTMLElement, change: Change, host: CardHost): void 
 		return;
 	}
 	const status = field.createDiv({ cls: "book-sync-lookup" });
-	const shown = lookupMessages.get(change.id);
+	const shown = lookupMessages.get(change);
 	if (shown) {
 		status.setText(shown.text);
 		status.toggleClass("is-ok", shown.ok);
 	}
 	box.addEventListener("input", () => {
 		input.value = box.value;
-		window.clearTimeout(lookupTimers.get(change.id));
+		window.clearTimeout(lookupTimers.get(change));
 		// Ready only once the lookup found exactly one book; anything typed since makes it wait again
-		const run = (lookupRuns.get(change.id) ?? 0) + 1;
-		lookupRuns.set(change.id, run);
+		const run = (lookupRuns.get(change) ?? 0) + 1;
+		lookupRuns.set(change, run);
 		const wasReady = change.ready;
 		change.ready = false;
 		change.selected = false;
-		lookupMessages.delete(change.id);
+		lookupMessages.delete(change);
 		status.setText(box.value.trim() ? "Looking it up on Hardcover…" : "");
 		status.removeClass("is-ok");
 		if (wasReady) {
@@ -169,19 +171,23 @@ function renderInput(parent: HTMLElement, change: Change, host: CardHost): void 
 		if (!box.value.trim()) {
 			return;
 		}
+		const pasted = input.value;
 		lookupTimers.set(
-			change.id,
+			change,
 			window.setTimeout(async () => {
+				// The lookup fills a copy: a slow answer for an older paste must not land on the change
+				const probe: Change = { ...change, details: [...change.details], input: { ...input }, payload: { ...(change.payload as object) } };
 				let text: string;
 				try {
-					text = await host.resolveLink(change);
+					text = await host.resolveLink(probe);
 				} catch (err) {
 					text = `Lookup failed: ${(err as Error).message}`;
 				}
-				if (lookupRuns.get(change.id) !== run) {
+				if (lookupRuns.get(change) !== run || input.value !== pasted || !host.editable) {
 					return;
 				}
-				lookupMessages.set(change.id, { text, ok: change.ready });
+				Object.assign(change, { payload: probe.payload, ready: probe.ready, selected: probe.selected, details: probe.details });
+				lookupMessages.set(change, { text, ok: change.ready });
 				host.refresh(change.id);
 			}, 700),
 		);
@@ -236,6 +242,13 @@ function renderLabels(field: HTMLElement, change: Change, host: CardHost): void 
 		}
 	};
 	entry.addEventListener("input", () => {
+		// Android keyboards don't report "," as a key: a typed comma adds what's before it
+		if (entry.value.includes(",")) {
+			const parts = entry.value.split(",");
+			const rest = parts.pop() ?? "";
+			parts.forEach((part) => add(part));
+			entry.value = rest;
+		}
 		suggestions.empty();
 		const query = entry.value.trim().toLowerCase();
 		if (!query) {

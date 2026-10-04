@@ -153,10 +153,12 @@ export class BookSyncView extends ItemView {
 
 	private render(focusId?: string): void {
 		this.ensureDom();
-		// A re-render keeps the focus on the field that had it
+		// A re-render keeps the focus (and the cursor) on the field that had it
 		const active = document.activeElement;
-		if (!focusId && active instanceof HTMLElement && this.contentEl.contains(active)) {
+		let selection: [number, number] | null = null;
+		if (active instanceof HTMLInputElement && this.contentEl.contains(active) && (!focusId || active.dataset.focusId === focusId)) {
 			focusId = active.dataset.focusId;
+			selection = [active.selectionStart ?? active.value.length, active.selectionEnd ?? active.value.length];
 		}
 		const scroll = this.bodyEl.scrollTop;
 		this.railEl.empty();
@@ -180,7 +182,8 @@ export class BookSyncView extends ItemView {
 		if (focusId) {
 			const field = this.bodyEl.querySelector<HTMLInputElement>(`[data-focus-id="${CSS.escape(focusId)}"]`);
 			field?.focus();
-			field?.setSelectionRange(field.value.length, field.value.length);
+			const [start, end] = selection ?? [field?.value.length ?? 0, field?.value.length ?? 0];
+			field?.setSelectionRange(Math.min(start, field.value.length), Math.min(end, field.value.length));
 		}
 	}
 
@@ -429,7 +432,8 @@ export class BookSyncView extends ItemView {
 				label.createEl("b", { text: PHASES.find((p) => p.id === STEP_INFO[entry.id].phase)!.name });
 				label.appendText(` · ${STEP_INFO[entry.id].name}`);
 				top.createSpan({ cls: "book-sync-muted", text: `${position + 1}/${session.entries.length}` });
-				this.endButton(top, "End");
+				// No ending halfway through a write: its result and reminders would go unseen
+				if (entry.status !== "applying") this.endButton(top, "End");
 			} else {
 				label.createEl("b", { text: "Finished" });
 			}
@@ -461,7 +465,7 @@ export class BookSyncView extends ItemView {
 				node.createSpan({ text: STEP_INFO[session.entries[i].id].short });
 			});
 		}
-		if (!session.finished) {
+		if (!session.finished && session.current?.status !== "applying") {
 			this.endButton(rail, "End sync");
 		}
 	}
@@ -628,10 +632,11 @@ export class BookSyncView extends ItemView {
 			if (!this.refineText.trim() || this.refining) return;
 			this.refining = true;
 			this.render();
+			const entry = this.session?.current;
 			try {
 				await this.plugin.refineLabels(plan, this.refineText);
 				this.refineText = "";
-				new Notice("Labels refined. Check them before applying.");
+				if (entry?.status === "review") new Notice("Labels refined. Check them before applying.");
 			} catch (err) {
 				new Notice(`Refining failed: ${(err as Error).message}`);
 			}
@@ -647,7 +652,8 @@ export class BookSyncView extends ItemView {
 
 	private cardHost(entry: SessionEntry, plan: Plan): CardHost {
 		return {
-			editable: entry.status === "review",
+			// Locked while the AI revises the labels: an edit or an apply now would be overwritten or miss the answer
+			editable: entry.status === "review" && !this.refining,
 			compact: Platform.isPhone,
 			result: entry.result,
 			isOpen: (id) => this.unfolded.has(id),
@@ -698,6 +704,13 @@ export class BookSyncView extends ItemView {
 		if (entry.status === "applied") {
 			const next = session.entries[session.position + 1];
 			this.foot("Step done", [[next ? `Next: ${STEP_INFO[next.id].name}` : "Finish", () => void session.next(), "mod-cta"]]);
+			return;
+		}
+		if (this.refining) {
+			this.foot("Revising the labels…", [
+				["Skip step", null, ""],
+				["Apply", null, "mod-cta"],
+			]);
 			return;
 		}
 		const selected = selectedChanges(plan);
