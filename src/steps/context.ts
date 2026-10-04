@@ -99,6 +99,15 @@ export function rowGoodreadsId(row: TableRow): string | null {
 	return /^\d+$/.test(id) ? id : null;
 }
 
+/** A row's Hardcover book id, or null. For a malformed row, from a hardcover.app book link anywhere in its line */
+export function rowHardcoverId(row: TableRow): string | null {
+	if (row.malformed) {
+		return /\[(\d+)\]\(https:\/\/hardcover\.app\/books\//.exec(row.original ?? "")?.[1] ?? null;
+	}
+	const id = extractId(row.cells["hardcover_id"] ?? "");
+	return /^\d+$/.test(id) ? id : null;
+}
+
 /** How a change finds its row again in the file's current text */
 export interface RowKey {
 	goodreadsId: string | null;

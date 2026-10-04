@@ -6,7 +6,7 @@ import type { ApplyResult, Change, Plan } from "../core/changes";
 import { emptyResult } from "../core/changes";
 import { hardcoverLink, parseHardcoverSlug } from "../core/idLinks";
 import { serializeTable, setCell } from "../core/table";
-import { ApplyContext, describeRow, findRow, HardcoverReads, loadBacklog, parseBacklog, paths, PlanContext, RowKey, rowKey, Step } from "./context";
+import { ApplyContext, describeRow, findRow, HardcoverReads, loadBacklog, parseBacklog, paths, PlanContext, rowHardcoverId, RowKey, rowKey, Step } from "./context";
 
 export interface LinkPayload {
 	key: RowKey;
@@ -25,7 +25,7 @@ export async function planLink(ctx: PlanContext): Promise<Plan<LinkPayload>> {
 	for (const [i, row] of table.rows.entries()) {
 		if (row.malformed) {
 			// Its cells may be shifted; only worth a note if the line holds no Hardcover link at all
-			if (!/\[\d+\]\(https:\/\/hardcover\.app\//.test(row.original ?? "")) {
+			if (!rowHardcoverId(row)) {
 				plan.notes.push(`${describeRow(row)}: the row's cell count doesn't match the header (a stray "|"?), so it can't be linked. Fix the row by hand.`);
 			}
 			continue;

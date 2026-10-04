@@ -125,6 +125,14 @@ export function parseBookPage(html: string): BookPage | null {
 	};
 }
 
+/** The RSS URL for another shelf of the same account ("read", "currently-reading"): its `shelf=` parameter swapped */
+export function shelfUrl(rssUrl: string, shelf: string): string {
+	const url = rssUrl.trim();
+	const param = /([?&])shelf=[^&#]*/;
+	const value = encodeURIComponent(shelf);
+	return param.test(url) ? url.replace(param, `$1shelf=${value}`) : `${url}${url.includes("?") ? "&" : "?"}shelf=${value}`;
+}
+
 export class GoodreadsClient {
 	private readonly clock: Clock;
 	private readonly timeoutMs: number;
