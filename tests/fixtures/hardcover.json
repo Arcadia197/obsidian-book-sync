@@ -1,0 +1,162 @@
+{
+	"_about": "Hardcover answers in the shape recorded with read-only queries on 2026-10-04, with made-up books, ids and names. rate-limited and unavailable follow the docs (Getting-Started.mdx, API Response Codes); the rest were recorded.",
+	"isbn-one-book": {
+		"status": 200,
+		"body": { "data": { "by_10": [], "by_13": [{ "book_id": 5001, "book": { "slug": "the-lantern-keeper" } }] } }
+	},
+	"isbn-same-book-twice": {
+		"status": 200,
+		"body": {
+			"data": {
+				"by_10": [{ "book_id": 5001, "book": { "slug": "the-lantern-keeper" } }],
+				"by_13": [{ "book_id": 5001, "book": { "slug": "the-lantern-keeper" } }]
+			}
+		}
+	},
+	"isbn-two-books": {
+		"status": 200,
+		"body": {
+			"data": {
+				"by_10": [{ "book_id": 5001, "book": { "slug": "the-lantern-keeper" } }],
+				"by_13": [{ "book_id": 5002, "book": { "slug": "the-lantern-keeper-2" } }]
+			}
+		}
+	},
+	"isbn-none": { "status": 200, "body": { "data": { "by_10": [], "by_13": [] } } },
+	"slug": { "status": 200, "body": { "data": { "books": [{ "id": 5001, "title": "The Lantern Keeper" }] } } },
+	"merges": {
+		"status": 200,
+		"body": {
+			"data": {
+				"books": [
+					{ "id": 6001, "canonical_id": null, "canonical": null },
+					{ "id": 6002, "canonical_id": 6001, "canonical": { "slug": "rivers-and-roads" } }
+				]
+			}
+		}
+	},
+	"my-lists": {
+		"status": 200,
+		"body": {
+			"data": {
+				"me": [
+					{
+						"lists": [
+							{ "id": 7001, "name": "Sci-Fi", "slug": "sci-fi" },
+							{ "id": 7002, "name": "owned", "slug": "owned-5" }
+						]
+					}
+				]
+			}
+		}
+	},
+	"list-books": { "status": 200, "body": { "data": { "list_books": [{ "book_id": 5001 }, { "book_id": 6001 }] } } },
+	"list-slug": { "status": 200, "body": { "data": { "lists": [{ "slug": "new-label" }] } } },
+	"statuses": {
+		"status": 200,
+		"body": { "data": { "me": [{ "user_books": [{ "book_id": 5001, "status_id": 3 }, { "book_id": 6001, "status_id": 2 }] }] } }
+	},
+	"details": {
+		"status": 200,
+		"body": {
+			"data": {
+				"me": [
+					{
+						"user_books": [
+							{
+								"book_id": 5001,
+								"status_id": 3,
+								"rating": 4.5,
+								"owned": false,
+								"first_started_reading_date": "2026-09-01",
+								"first_read_date": "2026-09-20",
+								"edition": {
+									"title": "The Lantern Keeper",
+									"isbn_10": "0000000001",
+									"isbn_13": "9780000000001",
+									"pages": 296,
+									"image": { "url": "https://example.invalid/edition-5001.jpg" },
+									"language": { "language": "French" },
+									"contributions": [{ "contribution": "Author", "author": { "name": "Ann Author" } }]
+								},
+								"book": {
+									"title": "The Lantern Keeper",
+									"slug": "the-lantern-keeper",
+									"pages": 300,
+									"description": "A keeper tends a lantern.",
+									"release_date": "1901-01-01",
+									"literary_type_id": 1,
+									"image": { "url": "https://example.invalid/book-5001.jpg" },
+									"contributions": [
+										{ "contribution": "Author", "author": { "name": "Ann Author" } },
+										{ "contribution": "Translator", "author": { "name": "Tom Translator" } }
+									],
+									"featured_book_series": null,
+									"book_series": []
+								}
+							}
+						]
+					}
+				]
+			}
+		}
+	},
+	"tracked": {
+		"status": 200,
+		"body": {
+			"data": {
+				"me": [
+					{
+						"user_books": [
+							{
+								"book_id": 5001,
+								"status_id": 1,
+								"book": { "title": "The Lantern Keeper", "contributions": [{ "contribution": null, "author": { "name": "Ann Author" } }] }
+							}
+						]
+					}
+				]
+			}
+		}
+	},
+	"finished": {
+		"status": 200,
+		"body": {
+			"data": {
+				"me": [{ "user_books": [{ "book_id": 5001, "status_id": 3, "rating": 4, "review": "Loved it.", "first_read_date": "2026-09-20" }] }]
+			}
+		}
+	},
+	"no-user": { "status": 200, "body": { "data": { "me": [] } } },
+	"insert-user-book": { "status": 200, "body": { "data": { "insert_user_book": { "id": 8001, "error": null } } } },
+	"insert-user-book-refused": {
+		"status": 200,
+		"body": { "data": { "insert_user_book": { "id": null, "error": "Book already on shelf" } } }
+	},
+	"insert-list": { "status": 200, "body": { "data": { "insert_list": { "id": 7003, "errors": null } } } },
+	"insert-list-refused": { "status": 200, "body": { "data": { "insert_list": { "id": null, "errors": ["Name has already been taken"] } } } },
+	"insert-list-book": { "status": 200, "body": { "data": { "insert_list_book": { "id": 9001 } } } },
+	"bad-token": {
+		"status": 401,
+		"headers": { "Content-Type": "application/json; charset=utf-8", "Www-Authenticate": "Bearer realm=\"hardcover\", error=\"invalid_token\"" },
+		"body": { "error": "invalid_token", "error_description": "Token is not associated with a user" }
+	},
+	"validation-error": {
+		"status": 200,
+		"body": {
+			"errors": [
+				{
+					"message": "field 'nonexistent_field' not found in type: 'users'",
+					"extensions": { "path": "$.selectionSet.me.selectionSet.nonexistent_field", "code": "validation-failed" }
+				}
+			]
+		}
+	},
+	"rate-limited": {
+		"status": 429,
+		"headers": { "retry-after": "3" },
+		"body": { "error": "Too Many Requests", "message": "Try again later" }
+	},
+	"rate-limited-no-header": { "status": 429, "body": { "error": "Too Many Requests", "message": "Try again later" } },
+	"unavailable": { "status": 503, "body": { "error": "Service temporarily unavailable" } }
+}

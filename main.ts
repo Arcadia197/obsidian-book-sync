@@ -1,4 +1,6 @@
 import { Plugin } from "obsidian";
+import { Clients, createClients, Endpoints } from "./src/api/clients";
+import { obsidianHttp } from "./src/obsidianHttp";
 import { BookSyncSettings, mergeSettings, migrateSecretNames } from "./src/settings";
 import { SettingsTab } from "./src/ui/SettingsTab";
 
@@ -16,5 +18,10 @@ export default class BookSyncPlugin extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
+	}
+
+	/** Fresh API clients with the current keys; `endpoints` is for the e2e test's fake servers */
+	clients(endpoints?: Endpoints): Clients {
+		return createClients(this.settings, obsidianHttp, endpoints);
 	}
 }

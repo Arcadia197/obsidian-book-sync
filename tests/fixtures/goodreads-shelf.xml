@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" >
+  <channel>
+    <xhtml:meta xmlns:xhtml="http://www.w3.org/1999/xhtml" name="robots" content="noindex" />
+    <title>Reader's bookshelf: to-read</title>
+    <copyright><![CDATA[Copyright (C) 2026 Goodreads LLC. All rights reserved.]]>
+    </copyright>
+    <link><![CDATA[https://www.goodreads.com/review/list_rss/1000?key=FAKEKEY&shelf=to-read]]></link>
+    <atom:link href="https://www.goodreads.com/review/list_rss/1000?key=FAKEKEY&amp;shelf=to-read" rel="self" type="application/rss+xml" />
+    <description><![CDATA[Reader's bookshelf: to-read]]></description>
+    <language>en-US</language>
+    <lastBuildDate>Sun, 04 Oct 2026 23:39:25 -0700</lastBuildDate>
+    <ttl>60</ttl>
+    <image>
+      <title>Reader's bookshelf: to-read</title>
+      <link><![CDATA[https://www.goodreads.com/review/list_rss/1000?key=FAKEKEY&shelf=to-read]]></link>
+      <width>144</width>
+      <height>41</height>
+      <url>https://s.gr-assets.com/images/layout/goodreads_logo_144.jpg</url>
+    </image>
+  <item>
+    <guid><![CDATA[https://www.goodreads.com/review/show/9000001?utm_medium=api&utm_source=rss]]></guid>
+    <pubDate><![CDATA[Sun, 04 Oct 2026 23:39:25 -0700]]></pubDate>
+    <title>The Lantern Keeper</title>
+    <link><![CDATA[https://www.goodreads.com/review/show/9000001?utm_medium=api&utm_source=rss]]></link>
+    <book_id>1000001</book_id>
+    <book_image_url><![CDATA[https://i.gr-assets.com/images/S/books/1000001._SY75_.jpg]]></book_image_url>
+    <book_description><![CDATA[A keeper tends a lantern. <title>not this one</title> <b>Bold</b> & loose ampersands.]]></book_description>
+    <book id="1000001">
+      <num_pages>296</num_pages>
+    </book>
+    <author_name>Ann Author</author_name>
+    <isbn>0000000001</isbn>
+    <user_name>Reader</user_name>
+    <user_rating>0</user_rating>
+    <user_read_at></user_read_at>
+    <user_date_added><![CDATA[Sun, 04 Oct 2026 23:39:25 -0700]]></user_date_added>
+    <user_date_created><![CDATA[Sun, 04 Oct 2026 23:39:25 -0700]]></user_date_created>
+    <user_shelves>to-read</user_shelves>
+    <user_review></user_review>
+    <average_rating>3.40</average_rating>
+    <book_published>1901</book_published>
+    <description>
+      <![CDATA[
+      <a href="https://www.goodreads.com/book/show/1000001.The_Lantern_Keeper?utm_medium=api&amp;utm_source=rss"><img alt="The Lantern Keeper" src="https://i.gr-assets.com/images/S/books/1000001._SY75_.jpg" /></a><br/>
+                                      author: Ann Author<br/>
+                                      date added: 2026/10/04<br/>
+                                      ]]>
+    </description>
+  </item>
+  <item>
+    <guid><![CDATA[https://www.goodreads.com/review/show/9000002?utm_medium=api&utm_source=rss]]></guid>
+    <pubDate><![CDATA[Sat, 3 Oct 2026 08:00:00 +0200]]></pubDate>
+    <title><![CDATA[Rivers & Roads: A Field Guide (Wayfarer, #1)]]></title>
+    <link><![CDATA[https://www.goodreads.com/review/show/9000002?utm_medium=api&utm_source=rss]]></link>
+    <book_id>1000002</book_id>
+    <book_description><![CDATA[]]></book_description>
+    <book id="1000002">
+      <num_pages></num_pages>
+    </book>
+    <author_name>Bea   Writer</author_name>
+    <isbn></isbn>
+    <user_name>Reader</user_name>
+    <user_date_added><![CDATA[Sat, 3 Oct 2026 08:00:00 +0200]]></user_date_added>
+    <user_shelves>to-read</user_shelves>
+  </item>
+  <item>
+    <guid><![CDATA[https://www.goodreads.com/review/show/9000003?utm_medium=api&utm_source=rss]]></guid>
+    <title>L&apos;âme du &quot;monde&quot; &amp; &#233;t&#xE9;</title>
+    <book_id>1000003</book_id>
+    <author_name>Cé Auteur</author_name>
+    <isbn>000000003X</isbn>
+    <user_date_added><![CDATA[Thu, 01 Jan 2026 00:00:01 +0000]]></user_date_added>
+  </item>
+  <item>
+    <guid><![CDATA[https://www.goodreads.com/review/show/9000004?utm_medium=api&utm_source=rss]]></guid>
+    <title>
+      A Title
+      Over Two Lines
+    </title>
+    <book_id>1000004</book_id>
+    <author_name>Dee Author</author_name>
+    <isbn>0000000004</isbn>
+    <user_date_added></user_date_added>
+  </item>
+  </channel>
+</rss>
