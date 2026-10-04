@@ -3,7 +3,7 @@
 // (E2E_VISIBLE=1 keeps it on screen). Your own Obsidian and vaults are not touched.
 import { readFileSync } from "fs";
 import { startFakeServer } from "./fakeServer.mjs";
-import { closeObsidian, createVault, launchObsidian, PLUGIN_ID, readVaultFile } from "./lib.mjs";
+import { closeObsidian, createVault, launchObsidian, PLUGIN_ID, readVaultFile, vaultFileExists } from "./lib.mjs";
 
 const results = [];
 function check(name, ok, detail = "") {
@@ -15,7 +15,60 @@ const TOKEN = "fake-hardcover-token-4f9c2e";
 const SECRET_NAME = "e2e-openai-key";
 const SECRET_VALUE = "fake-openai-key-7d1a";
 
-createVault({ "Books/Want to Read.md": "# Want to Read\n" }, { booksFolder: "Books", legacySetting: "drop me" });
+// --- Files for the pipeline steps (made-up books)
+const gr = (id) => `[${id}](https://www.goodreads.com/book/show/${id})`;
+const BACKLOG_PATH = "Books/Want to Read.md";
+const BACKLOG = [
+	"# Want to Read", "", "> [!note]- How to edit this table by hand", "> Keep the header row.", "",
+	"| Title | Author | DateAdded | Genre | Labels | Notes | isbn | goodreads_id | hardcover_id |",
+	"| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+	`|  | Ann Author | 2026-01-01 |  |  |  |  | ${gr(1000001)} |  |`,
+	`| Reading Book | Cee Writer | 2025-06-01 | Essay | Sci-Fi | gift from Lea |  | ${gr(3000001)} | [7001](https://hardcover.app/books/reading-book) |`,
+	`| Has Note | Dee Writer | 2025-05-01 |  |  |  |  | ${gr(3000002)} |  |`,
+	"", "Text below the table.", "",
+].join("\n");
+const note = (fields, labels) => ["---", ...fields, labels.length ? `labels:\n${labels.map((l) => `  - ${l}`).join("\n")}` : "labels: []",
+	"rating_10:", "medium: paper", "---", "# Note", "", "---", "find all books in [[../List of books]]", "", "## My notes", "Hand-written.", ""].join("\n");
+const FINISHING_PATH = "Books/Database/Eve Writer - Finishing.md";
+const STEP_FILES = {
+	[BACKLOG_PATH]: BACKLOG,
+	"Books/Database/Dee Writer - Has Note.md": note(["author: Dee Writer", "title: Has Note", "dateRead: 2025-01-01",
+		"goodreads_id: https://www.goodreads.com/book/show/3000002", "hardcover_id: 7003"], []),
+	[FINISHING_PATH]: note(["author: Eve Writer", "title: Finishing", "dateRead:", "goodreads_id:", "hardcover_id: 7002"], ["Sci-Fi"]),
+};
+const READING_BOOK = {
+	book_id: 7001, status_id: 2, rating: null, owned: true, first_started_reading_date: "2026-09-01", first_read_date: null,
+	edition: { title: "Reading Book", isbn_10: null, isbn_13: "9780000007001", pages: 250, image: { url: "https://example.invalid/7001.jpg" },
+		language: { language: "English" }, contributions: [{ contribution: null, author: { name: "Cee Writer" } }] },
+	book: { title: "Reading Book", slug: "reading-book", pages: 250, description: "A made-up book.", release_date: "2001-01-01", literary_type_id: 1,
+		image: null, contributions: [{ contribution: null, author: { name: "Cee Writer" } }], featured_book_series: null, book_series: [] },
+};
+// Hardcover for the steps, answered by query; any mutation is recorded and refused (step 4 never writes to Hardcover)
+const hardcoverMutations = [];
+function stepsHardcover({ query, variables }) {
+	const data = (d) => ({ status: 200, body: { data: d } });
+	const me = (userBooks) => data({ me: [{ user_books: userBooks }] });
+	if (/^\s*mutation/.test(query)) {
+		hardcoverMutations.push(query);
+		return { status: 500, body: "no Hardcover writes expected" };
+	}
+	if (query.includes("GetEditionByISBN")) {
+		return data(variables.isbn === "0000000001" ? { by_10: [], by_13: [{ book_id: 5001, book: { slug: "the-lantern-keeper" } }] } : { by_10: [], by_13: [] });
+	}
+	if (query.includes("ResolveMerges")) return data({ books: [] });
+	if (query.includes("UserBookDetails")) return me([READING_BOOK]);
+	if (query.includes("FinishedInfo")) {
+		return me([
+			{ book_id: 7002, status_id: 3, rating: 4, review: "Loved it.", first_read_date: "2026-09-20" },
+			{ book_id: 7001, status_id: 2, rating: null, review: null, first_read_date: null },
+		]);
+	}
+	if (query.includes("status_id: {_in: [2, 3]}")) return me([{ book_id: 7001, status_id: 2 }, { book_id: 7002, status_id: 3 }]);
+	return { status: 500, body: "unexpected query" };
+}
+let hardcoverScenario = null;
+
+createVault({ ...STEP_FILES }, { booksFolder: "Books", legacySetting: "drop me" });
 
 const fixture = (name) => readFileSync(new URL(`../fixtures/${name}`, import.meta.url), "utf8");
 const HARDCOVER = JSON.parse(fixture("hardcover.json"));
@@ -26,7 +79,10 @@ const RSS_PATH = "/review/list_rss/1000?key=E2EKEY&shelf=to-read";
 let cdp;
 let fake;
 try {
-	fake = await startFakeServer(({ method, path }) => {
+	fake = await startFakeServer(({ method, path, body }) => {
+		if (method === "POST" && path === "/graphql" && hardcoverScenario) {
+			return hardcoverScenario(JSON.parse(body));
+		}
 		if (method === "POST" && path === "/graphql") {
 			const next = HARDCOVER[queue.hardcover.shift()];
 			return next ?? { status: 500, body: "no answer queued" };
@@ -178,6 +234,73 @@ try {
 		JSON.stringify(labels) === JSON.stringify({ "1": ["Sci-Fi"] }) && fake.requests.at(-1).headers.authorization === `Bearer ${SECRET_VALUE}`
 			&& chatRequest.model === "gpt-6-sol",
 		JSON.stringify({ labels, model: chatRequest.model }));
+
+	// --- Pipeline steps: plan() reads only, apply() writes only ticked changes, in the test vault
+	hardcoverScenario = stepsHardcover;
+	await cdp.eval(`plugin.settings.booksFolder = "Books"; plugin.settings.goodreadsRssUrl = ${JSON.stringify(fake.url + RSS_PATH)};`);
+	const planStep = (id) => cdp.eval(`window.__plan = await plugin.planStep(${JSON.stringify(id)}, ${endpoints}); return window.__plan;`);
+	const applyStep = (select = "") => cdp.eval(`${select}; return await plugin.applyStep(window.__plan);`);
+	const backlog = () => readVaultFile(BACKLOG_PATH);
+	const rowOf = (id) => backlog().split("\n").find((line) => line.includes(`[${id}](`));
+
+	queue.openai.push({ status: 200, body: { choices: [{ message: { content: JSON.stringify({ "1000002": ["Sci-Fi"], "1000003": ["Made Up"], "1000004": [] }) } }] } });
+	let plan = await planStep("backlog/pullGoodreads");
+	const chat = JSON.parse(fake.requests.at(-1).body);
+	check("pull: plan lists new rows and updates, with label suggestions from the notes' vocabulary, and writes nothing",
+		JSON.stringify(plan.changes.map((c) => c.id)) === JSON.stringify(["update:1000001", "add:1000002", "add:1000003", "add:1000004"])
+			&& plan.changes.find((c) => c.id === "add:1000002").input.value === "Sci-Fi"
+			&& chat.messages[0].content.includes("- Sci-Fi: e.g. Finishing") && backlog() === BACKLOG,
+		JSON.stringify({ ids: plan.changes.map((c) => c.id), labels: plan.changes.map((c) => c.input?.value) }));
+
+	const nothing = await applyStep("window.__plan.changes.forEach((c) => (c.selected = false))");
+	check("pull: applying with nothing ticked writes nothing", backlog() === BACKLOG && nothing.applied.length === 0, JSON.stringify(nothing));
+
+	const pulled = await applyStep(`window.__plan.changes.forEach((c) => (c.selected = c.id !== "add:1000003"))`);
+	const order = backlog().split("\n").filter((l) => /^\| (?!Title|---)/.test(l)).map((l) => l.split("|")[1].trim());
+	check("pull: ticked rows written, the unticked one not, hand columns kept, newest first, callout and text intact",
+		rowOf(1000001)?.startsWith("| The Lantern Keeper | Ann Author | 2026-10-04 |") && rowOf(1000001).includes("| 0000000001 |")
+			&& /\| Sci-Fi \|/.test(rowOf(1000002)) && !rowOf(1000003) && rowOf(3000001).includes("gift from Lea")
+			&& JSON.stringify(order) === JSON.stringify(["The Lantern Keeper", "Rivers & Roads: A Field Guide (Wayfarer, #1)", "Reading Book", "Has Note", "A Title Over Two Lines"])
+			&& backlog().includes("> [!note]- How to edit this table by hand") && backlog().endsWith("Text below the table.\n"),
+		JSON.stringify({ order, pulled }) + "\n" + backlog());
+
+	const afterFirst = backlog();
+	const again = await applyStep();
+	check("pull: applying the same plan twice (double click) adds no duplicate rows",
+		backlog() === afterFirst && again.skipped.filter((s) => s.reason === "already in the table").length === 2, JSON.stringify(again));
+
+	plan = await planStep("backlog/linkIds");
+	const linked = await applyStep();
+	check("link: a unique isbn match is written, a row without a match waits for a paste and stays blank",
+		rowOf(1000001).endsWith("| [5001](https://hardcover.app/books/the-lantern-keeper) |") && rowOf(1000004).endsWith("|  |")
+			&& plan.changes.find((c) => c.id === "link:1000004")?.ready === false && linked.applied.join() === "link:1000001",
+		JSON.stringify({ changes: plan.changes.map((c) => [c.id, c.ready]), linked }));
+
+	plan = await planStep("archive/promote");
+	const promoted = await applyStep();
+	const newNote = "Books/Database/Cee Writer - Reading Book.md";
+	const noteText = vaultFileExists(newNote) ? readVaultFile(newNote) : "";
+	check("promote: the started book gets its note (row's ids, genre and labels carried over) and its row is removed",
+		plan.changes.some((c) => c.id === "promote:7001" && c.warnings.some((w) => w.includes("gift from Lea")))
+			&& noteText.includes("goodreads_id: https://www.goodreads.com/book/show/3000001\nhardcover_id: 7001\n")
+			&& noteText.includes("genre:\n  - Essay\nlabels:\n  - Sci-Fi\n") && !rowOf(3000001) && promoted.applied.join() === "promote:7001",
+		JSON.stringify({ ids: plan.changes.map((c) => c.id), promoted }) + "\n" + noteText);
+
+	plan = await planStep("archive/reconcile");
+	await applyStep();
+	check("reconcile: a row whose book already has a note is removed", plan.changes.map((c) => c.id).join() === "remove:3000002" && !rowOf(3000002),
+		JSON.stringify(plan.changes.map((c) => c.id)));
+
+	plan = await planStep("archive/finished");
+	await applyStep();
+	await applyStep();
+	const finishedNote = readVaultFile(FINISHING_PATH);
+	check("finished: dateRead, rating and review written once, the hand-written section kept after it",
+		finishedNote.includes("dateRead: 2026-09-20\n") && finishedNote.includes("rating_10: 8\n")
+			&& finishedNote.split("## Hardcover review").length === 2
+			&& finishedNote.includes("find all books in [[../List of books]]\n\n## Hardcover review\nLoved it.\n\n## My notes"),
+		finishedNote);
+	check("no step sent a mutation to Hardcover", hardcoverMutations.length === 0, hardcoverMutations.join("\n"));
 } catch (err) {
 	check("e2e run finished without an exception", false, err.stack ?? String(err));
 } finally {
