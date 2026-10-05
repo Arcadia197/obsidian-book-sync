@@ -652,6 +652,25 @@ try {
 			&& settingsUi.results["OpenAI API key"] === "The key works."
 			&& settingsUi.results["Goodreads RSS URL"] === "The feed works: 4 books on the shelf.",
 		JSON.stringify(settingsUi.results));
+
+	const suggest = await cdp.eval(`
+		app.setting.open(); app.setting.openTabById(${JSON.stringify(PLUGIN_ID)});
+		await new Promise((r) => setTimeout(r, 800));
+		const tab = app.setting.activeTab;
+		const doc = tab.containerEl.ownerDocument;
+		const field = (name) => [...tab.containerEl.querySelectorAll(".setting-item")].find((el) => el.querySelector(".setting-item-name")?.textContent === name).querySelector("input");
+		const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+		const type = async (input, text) => { input.focus(); input.value = text; input.dispatchEvent(new Event("input")); await pause(300);
+			return [...doc.querySelectorAll(".suggestion-container .suggestion-item")].map((el) => el.textContent); };
+		const folders = await type(field("Database folder"), "Data");
+		const files = await type(field("Want to Read file"), "want");
+		doc.querySelector(".suggestion-container .suggestion-item")?.click(); await pause(300);
+		const saved = plugin.settings.wantToReadFile;
+		app.setting.close();
+		return { folders, files, saved, sameDoc: doc === document, connected: tab.containerEl.isConnected };`);
+	check("settings: folder and file fields suggest paths inside the Books folder; picking one saves it",
+		suggest.folders.includes("Database") && suggest.files.join() === "Want to Read.md" && suggest.saved === "Want to Read.md",
+		JSON.stringify(suggest));
 } catch (err) {
 	check("e2e run finished without an exception", false, err.stack ?? String(err));
 } finally {
