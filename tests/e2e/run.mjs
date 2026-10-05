@@ -434,6 +434,10 @@ try {
 	const uiHold = { promise: null, release: null };
 	const holdHardcover = () => (uiHold.promise = new Promise((resolve) => (uiHold.release = resolve)));
 	function uiHardcover(request) {
+		if (request.query.includes("GetBookBySlug") && request.variables.slug === "slow-wrong-book") {
+			// Answers after the user has pasted something else: must not land on the change
+			return sleep(2500).then(() => ({ status: 200, body: { data: { books: [{ id: 9999, title: "Slow Wrong Book" }] } } }));
+		}
 		if (request.query.includes("GetBookBySlug")) {
 			return { status: 200, body: { data: { books: request.variables.slug === "the-fourth" ? [{ id: 5004, title: "The Fourth Book" }] : [] } } };
 		}
@@ -480,13 +484,16 @@ try {
 	await ui(`button("Next:").click();`);
 	await waitUi(`card("link:1000004")?.querySelector("[data-focus-id]")`);
 	const waiting = await ui(`return { ticked: card("link:1000004").querySelector(".book-sync-tick").checked, apply: button("Nothing ticked")?.disabled };`);
+	// First a link whose lookup answers late, then the right one: the late answer must not replace it
 	await ui(`const field = card("link:1000004").querySelector("[data-focus-id]");
+		field.value = "https://hardcover.app/books/slow-wrong-book"; field.dispatchEvent(new Event("input")); await pause(1200);
 		field.value = "https://hardcover.app/books/the-fourth"; field.dispatchEvent(new Event("input"));`);
 	await waitUi(`card("link:1000004")?.classList.contains("is-selected")`);
+	await sleep(2500);
 	const pasted = await ui(`return card("link:1000004").querySelector(".book-sync-lookup").textContent;`);
 	await ui(`button("Apply 1").click();`);
 	await waitUi(`button("Next:")`);
-	check("view: a pasted Hardcover link is looked up, ticks its card, and Apply writes the id",
+	check("view: a pasted Hardcover link is looked up, ticks its card, and Apply writes its id (a late answer for an earlier paste is dropped)",
 		waiting.ticked === false && waiting.apply === true && /The Fourth Book/.test(pasted)
 			&& rowOf(1000004).endsWith("| [5004](https://hardcover.app/books/the-fourth) |"),
 		JSON.stringify({ waiting, pasted }) + "\n" + rowOf(1000004));
@@ -567,6 +574,46 @@ try {
 	await cdp.eval(`await app.vault.adapter.write(${JSON.stringify(DONE_NOTE)}, "---\\nmedium: paper\\n---\\n"); await plugin.checkTodos();`);
 	check("left for you: an item ticks itself off once the field is filled; an offline remote check keeps its items",
 		stillOpen && !todoKeys().includes("fields:fill-me") && todoKeys().includes("edition:8001"), JSON.stringify(todoKeys()));
+
+	// --- Labels in the review tab: Hardcover cards start unticked, Tick all, a push into a new list ticks the list too
+	hardcoverScenario = writingHardcover;
+	await cdp.eval(`await app.vault.adapter.write(${JSON.stringify(BACKLOG_PATH)}, ${JSON.stringify(WRITING_BACKLOG.replace("| Pushed Book | Ada Writer | 2026-10-02 |  |  |", "| Pushed Book | Ada Writer | 2026-10-02 |  | Drama |"))});
+		await app.vault.adapter.write(${JSON.stringify(LISTS_PATH)}, ${JSON.stringify(LISTS_FILE)});`);
+	const mutationsBefore = writing.mutations.length;
+	await cdp.eval(`app.commands.executeCommandById("${PLUGIN_ID}:sync-labels");`);
+	await waitUi(`card("push:drama:8001")`);
+	const ticked = (id) => `card(${JSON.stringify(id)}).querySelector(".book-sync-tick").checked`;
+	const labelsUi = await ui(`
+		const hc = () => [...root.querySelectorAll(".book-sync-card.is-hardcover")];
+		const start = { hcTicked: hc().filter((c) => c.querySelector(".book-sync-tick").checked).length, hcCount: hc().length };
+		card("push:drama:8001").querySelector(".book-sync-summary").click(); await pause(50);
+		const both = [${ticked("push:drama:8001")}, ${ticked("list:drama")}];
+		card("list:drama").querySelector(".book-sync-summary").click(); await pause(50);
+		const neither = [${ticked("push:drama:8001")}, ${ticked("list:drama")}];
+		root.querySelector(".book-sync-group.is-hardcover button").click(); await pause(50);
+		const all = hc().every((c) => c.querySelector(".book-sync-tick").checked);
+		root.querySelector(".book-sync-group.is-hardcover button").click(); await pause(50);
+		const none = hc().every((c) => !c.querySelector(".book-sync-tick").checked);
+		card("push:drama:8001").querySelector(".book-sync-summary").click(); await pause(50);
+		return { start, both, neither, all, none, apply: button("Apply")?.textContent, hcButton: button("Apply")?.classList.contains("is-hardcover") };`);
+	await ui(`button("Apply").click();`);
+	await waitUi(`button("Finish")`);
+	const labelMutations = writing.mutations.slice(mutationsBefore).map((m) => `${m.query} ${JSON.stringify(m.object)}`);
+	check("view: labels start with Hardcover unticked; a push into a new list ticks the list, unticking the list unticks the push; Tick all works",
+		labelsUi.start.hcTicked === 0 && labelsUi.start.hcCount >= 3 && labelsUi.both.join() === "true,true" && labelsUi.neither.join() === "false,false"
+			&& labelsUi.all && labelsUi.none && labelsUi.hcButton === true
+			&& labelMutations.length === 2 && labelMutations[0] === 'InsertList {"name":"Drama","privacy_setting_id":1}'
+			&& /^InsertListBook \{"list_id":\d+,"book_id":8001\}$/.test(labelMutations[1]),
+		JSON.stringify({ labelsUi, labelMutations }));
+
+	await ui(`button("Finish").click();`);
+	await waitUi(`root?.querySelector(".book-sync-tally")`);
+	const summary = await ui(`return { title: root.querySelector(".book-sync-done h2")?.textContent, rows: [...root.querySelectorAll(".book-sync-tally tr")].map((r) => r.textContent),
+		status: document.querySelector(".book-sync-status")?.textContent };`);
+	check("view: the summary tallies the run, the status bar says it's finished",
+		summary.title === "Sync finished" && summary.rows.length === 1 && /Labels · Sync labels\d+ written/.test(summary.rows[0]) && summary.status === "Book Sync: finished",
+		JSON.stringify(summary));
+	await ui(`button("Back to Book Sync").click();`);
 
 	// --- Settings (step 6): model dropdown with Custom, and a Test button per key against the fake servers
 	hardcoverScenario = (request) => request.query.includes("WhoAmI")
