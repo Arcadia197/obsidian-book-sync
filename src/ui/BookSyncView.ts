@@ -21,6 +21,8 @@ export class BookSyncView extends ItemView {
 	private footEl!: HTMLElement;
 	/** Phone cards whose details are unfolded */
 	private unfolded = new Set<string>();
+	/** What was on screen last (a step, the start page, the summary): a new screen starts at the top */
+	private shownScreen: unknown = null;
 	/** "Left for you" keys before the run, to show what it added */
 	private todosBefore = new Set<string>();
 	/** Steps whose "nothing to do" was already announced */
@@ -116,8 +118,6 @@ export class BookSyncView extends ItemView {
 		this.session = new SyncSession(steps, { plan: (id) => this.plugin.planStep(id), apply: (plan) => this.plugin.applyStep(plan) }, () =>
 			this.onSessionChange(),
 		);
-		this.ensureDom();
-		this.bodyEl.scrollTop = 0;
 		void this.session.start();
 	}
 
@@ -160,7 +160,9 @@ export class BookSyncView extends ItemView {
 			focusId = active.dataset.focusId;
 			selection = [active.selectionStart ?? active.value.length, active.selectionEnd ?? active.value.length];
 		}
-		const scroll = this.bodyEl.scrollTop;
+		const screen = this.session && !this.session.ended ? (this.session.current ?? this.session) : "home";
+		const scroll = screen === this.shownScreen ? this.bodyEl.scrollTop : 0;
+		this.shownScreen = screen;
 		this.railEl.empty();
 		this.bodyEl.empty();
 		this.footEl.empty();
