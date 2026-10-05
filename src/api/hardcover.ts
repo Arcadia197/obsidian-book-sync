@@ -154,6 +154,13 @@ class Transport {
 	}
 }
 
+export interface ShelfEdition {
+	/** The edition on your shelf; null until Hardcover or you set one */
+	edition: number | null;
+	/** The book's default editions (physical, ebook, audio, cover) */
+	defaults: number[];
+}
+
 /** Read-only access. Has no mutate(), and query() refuses mutations */
 export class HardcoverReader {
 	/** @internal */
@@ -285,21 +292,28 @@ export class HardcoverReader {
 		return me.user_books;
 	}
 
-	/** Of these books, the ones on your shelves (any status), and those with an edition picked ("Left for you") */
-	async shelfEditions(ids: Iterable<string | number>): Promise<{ tracked: Set<number>; picked: Set<number> }> {
+	/**
+	 * Of these books, the ones on your shelves (any status, the map's keys) with their edition and the book's default
+	 * editions ("Left for you"). A book added without an edition gets a default one from Hardcover within a second
+	 * (seen 2026-10-05), so a set edition alone doesn't mean you picked it
+	 */
+	async shelfEditions(ids: Iterable<string | number>): Promise<Map<number, ShelfEdition>> {
 		const wanted = bookIds(ids);
 		if (!wanted.length) {
-			return { tracked: new Set(), picked: new Set() };
+			return new Map();
 		}
-		// Schemas/UserBooks.mdx: edition is null until one is picked
-		const me = await this.me<{ user_books: { book_id: number; edition: { id: number } | null }[] }>(
-			`query ShelfEditions($ids: [Int!]!) { me { user_books(where: {book_id: {_in: $ids}}) { book_id edition { id } } } }`,
+		type Defaults = Record<"default_physical_edition_id" | "default_ebook_edition_id" | "default_audio_edition_id" | "default_cover_edition_id", number | null>;
+		const me = await this.me<{ user_books: { book_id: number; edition_id: number | null; book: Defaults | null }[] }>(
+			`query ShelfEditions($ids: [Int!]!) { me { user_books(where: {book_id: {_in: $ids}}) { book_id edition_id ` +
+				`book { default_physical_edition_id default_ebook_edition_id default_audio_edition_id default_cover_edition_id } } } }`,
 			{ ids: wanted },
 		);
-		return {
-			tracked: new Set(me.user_books.map((u) => u.book_id)),
-			picked: new Set(me.user_books.filter((u) => u.edition).map((u) => u.book_id)),
-		};
+		return new Map(
+			me.user_books.map((u) => [
+				u.book_id,
+				{ edition: u.edition_id, defaults: [...new Set(Object.values(u.book ?? {}).filter((id): id is number => typeof id === "number"))] },
+			]),
+		);
 	}
 
 	/** Status, rating, review and finish date for these books, any status (check_finished_from_hardcover.py) */

@@ -11,8 +11,12 @@ export type TodoCheck =
 	| { kind: "noteFields"; path: string; fields: string[] }
 	/** Done when the backlog row has Labels (or is gone) */
 	| { kind: "rowLabels"; goodreadsId: string }
-	/** Done when the book on your Hardcover shelves has an edition picked (or isn't on them anymore) */
-	| { kind: "edition"; bookId: number }
+	/**
+	 * Done when the book on your Hardcover shelves has an edition other than `notPicked` (or isn't on them anymore).
+	 * `notPicked`: the edition Hardcover set by itself after the push and the book's defaults. Without it (items from
+	 * before 2026-10-05, or when the push couldn't read them) only a tick removes the item while the book is on a shelf
+	 */
+	| { kind: "edition"; bookId: number; notPicked?: number[] }
 	/** Done when the book is no longer on the Goodreads shelf of the RSS URL (to-read) */
 	| { kind: "offShelf"; goodreadsId: string };
 
@@ -163,7 +167,7 @@ function isCheck(value: unknown): value is TodoCheck {
 		case "offShelf":
 			return typeof check.goodreadsId === "string";
 		case "edition":
-			return typeof check.bookId === "number";
+			return typeof check.bookId === "number" && (check.notPicked === undefined || (Array.isArray(check.notPicked) && check.notPicked.every((id) => typeof id === "number")));
 		default:
 			return false;
 	}
@@ -181,8 +185,8 @@ export interface TodoChecks {
 	readNote(path: string): Promise<string | null>;
 	/** Labels cell of the backlog row with this goodreads_id; null when there is no such row */
 	rowLabels(goodreadsId: string): Promise<string | null>;
-	/** Of these Hardcover book ids, the ones on your shelves with an edition picked, and the ones on your shelves */
-	editions?(bookIds: number[]): Promise<{ picked: Set<number>; tracked: Set<number> }>;
+	/** Of these Hardcover book ids, the ones on your shelves (the keys) and the edition set there (null if none) */
+	editions?(bookIds: number[]): Promise<Map<number, number | null>>;
 	/** Goodreads ids on the to-read shelf; null when the feed may be cut off (a full page), so absence proves nothing */
 	shelfIds?(): Promise<Set<string> | null>;
 }
@@ -211,10 +215,11 @@ export async function doneTodos(todos: Todo[], checks: TodoChecks): Promise<Set<
 	if (editionTodos.length && checks.editions) {
 		try {
 			const ids = editionTodos.map((t) => (t.check as { bookId: number }).bookId);
-			const { picked, tracked } = await checks.editions(ids);
+			const onShelves = await checks.editions(ids);
 			for (const todo of editionTodos) {
-				const id = (todo.check as { bookId: number }).bookId;
-				if (picked.has(id) || !tracked.has(id)) done.add(todo.key);
+				const { bookId, notPicked } = todo.check as { bookId: number; notPicked?: number[] };
+				const edition = onShelves.get(bookId);
+				if (edition === undefined || (notPicked && edition !== null && !notPicked.includes(edition))) done.add(todo.key);
 			}
 		} catch {
 			// kept

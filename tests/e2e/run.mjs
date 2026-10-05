@@ -79,7 +79,8 @@ function writingHardcover({ query, variables }) {
 	if (/^\s*mutation/.test(query)) {
 		writing.mutations.push({ query: query.match(/mutation (\w+)/)[1], object: variables.object });
 		if (query.includes("insert_user_book")) {
-			writing.userBooks.push({ book_id: variables.object.book_id, status_id: 1, title: "?", author: "?" });
+			// Like Hardcover: a book added without an edition gets its default physical edition (here book id x 10)
+			writing.userBooks.push({ book_id: variables.object.book_id, status_id: 1, title: "?", author: "?", edition_id: variables.object.book_id * 10 });
 			return data({ insert_user_book: { id: 9000 + writing.userBooks.length, error: null } });
 		}
 		if (query.includes("insert_list_book")) {
@@ -102,6 +103,10 @@ function writingHardcover({ query, variables }) {
 	if (query.includes("GetListBooks")) return data({ list_books: (writing.members[variables.list_id] ?? []).map((book_id) => ({ book_id })) });
 	if (query.includes("lists { id name slug }")) return me({ lists: writing.lists });
 	if (query.includes("ResolveMerges")) return data({ books: [] });
+	if (query.includes("ShelfEditions")) {
+		return me({ user_books: writing.userBooks.filter((u) => variables.ids.includes(u.book_id)).map((u) => ({ book_id: u.book_id, edition_id: u.edition_id ?? null,
+			book: { default_physical_edition_id: u.book_id * 10, default_ebook_edition_id: u.book_id * 10 + 1, default_audio_edition_id: null, default_cover_edition_id: null } })) });
+	}
 	if (query.includes("FinishedInfo")) {
 		return me({ user_books: writing.userBooks.filter((u) => variables.ids.includes(u.book_id))
 			.map((u) => ({ book_id: u.book_id, status_id: u.status_id, rating: null, review: null, first_read_date: null })) });
@@ -382,9 +387,10 @@ try {
 
 	const pushedResult = await applyStep(tick(["push:8001"]));
 	await applyStep();
-	check("push: the ticked book is added once with its date (also on a second apply), the unticked one never; edition link shown",
+	check("push: the ticked book is added once with its date (also on a second apply), the unticked one never; edition link shown, Hardcover's default edition noted as not your pick",
 		JSON.stringify(mutations()) === JSON.stringify([`InsertUserBook {"book_id":8001,"status_id":1,"date_added":"2026-10-02"}`])
-			&& pushedResult.messages.some((m) => m.includes("https://hardcover.app/books/pushed-book")),
+			&& pushedResult.messages.some((m) => m.includes("https://hardcover.app/books/pushed-book"))
+			&& JSON.stringify(pushedResult.todos?.[0]?.check) === JSON.stringify({ kind: "edition", bookId: 8001, notPicked: [80010, 80011] }),
 		JSON.stringify({ mutations: mutations(), pushedResult }));
 
 	plan = await planStep("labels/sync");
@@ -576,6 +582,15 @@ try {
 	await cdp.eval(`await app.vault.adapter.write(${JSON.stringify(DONE_NOTE)}, "---\\nmedium: paper\\n---\\n"); await plugin.checkTodos();`);
 	check("left for you: an item ticks itself off once the field is filled; an offline remote check keeps its items",
 		stillOpen && !todoKeys().includes("fields:fill-me") && todoKeys().includes("edition:8001"), JSON.stringify(todoKeys()));
+
+	// The edition item: Hardcover's own default edition doesn't clear it, an edition picked on Hardcover does
+	hardcoverScenario = writingHardcover;
+	const remoteCheck = () => cdp.eval(`plugin.lastRemoteCheck = 0; await plugin.checkTodos(); return plugin.todos.some((t) => t.key === "edition:8001");`);
+	const keptOnDefault = await remoteCheck();
+	writing.userBooks.find((u) => u.book_id === 8001).edition_id = 12345;
+	const keptOnPick = await remoteCheck();
+	check("left for you: the edition item stays while Hardcover's default edition is set, and clears once you pick another",
+		keptOnDefault && !keptOnPick && !todoKeys().includes("edition:8001"), JSON.stringify({ keptOnDefault, keptOnPick, keys: todoKeys() }));
 
 	// A renamed note takes its item along; another device's data.json (via Obsidian Sync) is merged, not taken over
 	const RENAMED = "Books/Database/Fay Writer - Renamed.md";

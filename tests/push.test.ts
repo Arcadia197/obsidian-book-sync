@@ -2,6 +2,7 @@ import { test } from "node:test";
 import { strict as assert } from "node:assert";
 import { applyPush, planPush } from "../src/steps/push";
 import { selectedChanges } from "../src/core/changes";
+import { doneTodos } from "../src/core/todos";
 import type { TrackedBook } from "../src/api/hardcover";
 import { MemoryVault } from "./memoryVault";
 import { backlogFile, BACKLOG, context, row } from "./stepFixtures";
@@ -73,9 +74,9 @@ test("apply: nothing ticked sends nothing; ticked rows are added with their date
 	assert.match(result.messages[0], /no edition picked/);
 	assert.deepEqual(result.messages.slice(1), ["  - New One (Ann): https://hardcover.app/books/new-one", "  - No Date (Hal): https://hardcover.app/books/no-date"]);
 	assert.deepEqual(result.todos?.map((t) => [t.key, t.text, t.url, t.check]), [
-		["edition:101", "New One (Ann): pick your edition on Hardcover", "https://hardcover.app/books/new-one", { kind: "edition", bookId: 101 }],
-		["edition:108", "No Date (Hal): pick your edition on Hardcover", "https://hardcover.app/books/no-date", { kind: "edition", bookId: 108 }],
-	], "each pushed book's edition goes on the Left for you list");
+		["edition:101", "New One (Ann): pick your edition on Hardcover (if Hardcover's default is yours, tick this off)", "https://hardcover.app/books/new-one", { kind: "edition", bookId: 101, notPicked: [1010, 1011] }],
+		["edition:108", "No Date (Hal): pick your edition on Hardcover (if Hardcover's default is yours, tick this off)", "https://hardcover.app/books/no-date", { kind: "edition", bookId: 108, notPicked: [1080, 1081] }],
+	], "each pushed book's edition goes on the Left for you list, with the editions Hardcover set by itself");
 	assert.equal(ctx.vault.writes.length, 0);
 });
 
@@ -113,4 +114,26 @@ test("apply: Hardcover's refusal is reported; a network error stops the remainin
 	]);
 	assert.deepEqual(result.messages, []);
 	assert.deepEqual(result.todos?.map((t) => t.key), ["edition:51"], "a timed-out insert may have landed: its edition reminder is kept (the check drops it if not)");
+});
+
+test("regression: Hardcover's own default edition after a push doesn't clear the edition item, your pick does", async () => {
+	const { ctx } = setup();
+	const plan = await planPush(ctx);
+	plan.changes.forEach((c) => (c.selected = c.id === "push:101"));
+	// Read right after the insert, before Hardcover set its default (it takes a moment): the defaults still count
+	ctx.apply.hardcover.shelfEditions = async () => new Map([[101, { edition: null, defaults: [17836879, 5382573] }]]);
+	const [item] = (await applyPush(ctx.apply, selectedChanges(plan))).todos!;
+	const onShelf = (edition: number | null) => ({ readNote: async () => null, rowLabels: async () => null, editions: async () => new Map([[101, edition]]) });
+	assert.deepEqual([...(await doneTodos([item], onShelf(17836879)))], [], "Hardcover's default physical edition (the real case of 2026-10-05)");
+	assert.deepEqual([...(await doneTodos([item], onShelf(null)))], [], "no edition yet");
+	assert.deepEqual([...(await doneTodos([item], onShelf(42)))], ["edition:101"], "an edition you picked");
+
+	// Couldn't read what Hardcover set: no baseline, so only a tick (or the book leaving the shelves) removes it
+	ctx.apply.hardcover.finishedInfo = async () => [];
+	ctx.apply.hardcover.shelfEditions = async () => {
+		throw new Error("offline");
+	};
+	const [blind] = (await applyPush(ctx.apply, selectedChanges(plan))).todos!;
+	assert.deepEqual(blind.check, { kind: "edition", bookId: 101 });
+	assert.deepEqual([...(await doneTodos([blind], onShelf(42)))], []);
 });

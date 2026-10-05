@@ -26,7 +26,7 @@ export type HardcoverReads = Pick<
 /** What the Hardcover-writing steps (push, labels) use in apply(): the writes, plus reads to re-check right before */
 export type HardcoverWrites = Pick<
 	HardcoverWriter,
-	"addWantToRead" | "createList" | "addListBook" | "finishedInfo" | "myLists" | "listBookIds"
+	"addWantToRead" | "createList" | "addListBook" | "finishedInfo" | "myLists" | "listBookIds" | "shelfEditions"
 >;
 export type GoodreadsReads = Pick<GoodreadsClient, "fetchShelf" | "fetchBook">;
 export type LabelSuggester = Pick<OpenAiClient, "proposeLabels" | "refineLabels">;

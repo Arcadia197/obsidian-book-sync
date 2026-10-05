@@ -6,7 +6,8 @@
 // - Unlike the Python, stored ids are resolved through Hardcover's merges first; the labels step offers the on-file fix
 // - Hardcover writes start unticked. apply() asks Hardcover again right before writing, so a second apply or a retry
 //   after an interrupted run never adds a book twice
-// - insert_user_book sets no edition: after pushing, every book gets a link to pick the edition by hand
+// - insert_user_book sets no edition and Hardcover then sets a default one: after pushing, every book gets a link to
+//   pick the edition by hand. Its item clears itself only on an edition other than that default (or the book's others)
 
 import type { ApplyResult, Change, Plan } from "../core/changes";
 import { emptyResult } from "../core/changes";
@@ -144,15 +145,29 @@ export async function applyPush(ctx: WritingApplyContext, changes: Change<PushPa
 			}
 		}
 	}
-	if (pushed.length || uncertain.length) result.todos = [...pushed, ...uncertain].map((p) => ({
-		key: `edition:${p.bookId}`,
-		text: `${p.name}: pick your edition on Hardcover`,
-		url: p.slug ? hardcoverBookUrl(p.slug) : undefined,
-		check: { kind: "edition" as const, bookId: p.bookId },
-	}));
+	if (pushed.length || uncertain.length) {
+		const todoBooks = [...pushed, ...uncertain];
+		// What Hardcover set by itself: none of these counts as your pick. Unreadable: the item waits for a tick
+		let set: Awaited<ReturnType<WritingApplyContext["hardcover"]["shelfEditions"]>> | null = null;
+		try {
+			set = await ctx.hardcover.shelfEditions(todoBooks.map((p) => p.bookId));
+		} catch {
+			// kept without notPicked
+		}
+		result.todos = todoBooks.map((p) => {
+			const found = set?.get(p.bookId);
+			const notPicked = found ? [...new Set([...(found.edition === null ? [] : [found.edition]), ...found.defaults])] : undefined;
+			return {
+				key: `edition:${p.bookId}`,
+				text: `${p.name}: pick your edition on Hardcover (if Hardcover's default is yours, tick this off)`,
+				url: p.slug ? hardcoverBookUrl(p.slug) : undefined,
+				check: { kind: "edition" as const, bookId: p.bookId, ...(notPicked ? { notPicked } : {}) },
+			};
+		});
+	}
 	if (pushed.length) {
 		result.messages.push(
-			"IMPORTANT: these were added to Hardcover with no edition picked (insert_user_book takes none), so Hardcover shows a default edition. Choose the edition you own or read for each:",
+			"IMPORTANT: these were added to Hardcover with no edition picked (insert_user_book takes none), so Hardcover sets a default edition. Choose the edition you own or read for each:",
 			...pushed.map((p) => `  - ${p.name}: ${p.slug ? hardcoverBookUrl(p.slug) : "(no link, look it up by title)"}`),
 		);
 	}

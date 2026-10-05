@@ -145,10 +145,7 @@ export default class BookSyncPlugin extends Plugin {
 					const merges = await clients.hardcover.resolveMerges(ids);
 					const current = (id: number) => merges.get(String(id))?.id ?? id;
 					const found = await clients.hardcover.shelfEditions(ids.map(current));
-					return {
-						tracked: new Set(ids.filter((id) => found.tracked.has(current(id)))),
-						picked: new Set(ids.filter((id) => found.picked.has(current(id)))),
-					};
+					return new Map(ids.filter((id) => found.has(current(id))).map((id) => [id, found.get(current(id))!.edition]));
 				};
 			}
 			if (this.settings.goodreadsRssUrl) {

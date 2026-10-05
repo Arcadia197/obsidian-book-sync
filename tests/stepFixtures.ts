@@ -129,6 +129,8 @@ export function context(vault: MemoryVault, overrides: {
 				finishedInfo: unexpected("finishedInfo"),
 				myLists: unexpected("myLists"),
 				listBookIds: unexpected("listBookIds"),
+				// Like Hardcover after a push: every book on the shelves with its default physical edition (id x 10) set
+				shelfEditions: async (ids) => new Map([...ids].map((id) => [Number(id), { edition: Number(id) * 10, defaults: [Number(id) * 10, Number(id) * 10 + 1] }])),
 				...overrides.writer,
 			},
 		},

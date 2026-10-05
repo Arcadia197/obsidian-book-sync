@@ -28,11 +28,14 @@ test("parseTodos: keeps well-formed items from data.json, drops the rest", () =>
 	const parsed = parseTodos([
 		{ key: "fields:a.md", text: "A: fill medium", added: "2026-10-01", file: "a.md", check: { kind: "noteFields", path: "a.md", fields: ["medium"] } },
 		{ key: "x", text: "bad check dropped, item kept", check: { kind: "edition", bookId: "12" } },
+		{ key: "e", text: "edition with its baseline", check: { kind: "edition", bookId: 12, notPicked: [120, 121] } },
+		{ key: "y", text: "bad baseline: check dropped", check: { kind: "edition", bookId: 12, notPicked: ["120"] } },
 		{ key: "", text: "no key" },
 		"junk",
 		{ text: "no key at all" },
 	]);
-	assert.deepEqual(parsed.map((t) => [t.key, t.check?.kind ?? null]), [["fields:a.md", "noteFields"], ["x", null]]);
+	assert.deepEqual(parsed.map((t) => [t.key, t.check?.kind ?? null]), [["fields:a.md", "noteFields"], ["x", null], ["e", "edition"], ["y", null]]);
+	assert.deepEqual(parsed[2].check, { kind: "edition", bookId: 12, notPicked: [120, 121] });
 	assert.deepEqual(parseTodos(undefined), []);
 });
 
@@ -56,9 +59,11 @@ test("doneTodos: local checks every time, remote ones when given; errors keep th
 		todo("fields:gone", "gone", { check: { kind: "noteFields", path: "gone.md", fields: ["medium"] } }),
 		todo("labels:1", "l1", { check: { kind: "rowLabels", goodreadsId: "1" } }),
 		todo("labels:2", "l2", { check: { kind: "rowLabels", goodreadsId: "2" } }),
-		todo("edition:7", "e7", { check: { kind: "edition", bookId: 7 } }),
-		todo("edition:8", "e8", { check: { kind: "edition", bookId: 8 } }),
-		todo("edition:9", "e9", { check: { kind: "edition", bookId: 9 } }),
+		todo("edition:7", "e7", { check: { kind: "edition", bookId: 7, notPicked: [70, 71] } }),
+		todo("edition:8", "e8", { check: { kind: "edition", bookId: 8, notPicked: [80, 81] } }),
+		todo("edition:9", "e9", { check: { kind: "edition", bookId: 9, notPicked: [90] } }),
+		todo("edition:10", "e10", { check: { kind: "edition", bookId: 10 } }),
+		todo("edition:11", "e11", { check: { kind: "edition", bookId: 11, notPicked: [110] } }),
 		todo("shelf:5", "s5", { check: { kind: "offShelf", goodreadsId: "5" } }),
 		todo("shelf:6", "s6", { check: { kind: "offShelf", goodreadsId: "6" } }),
 		todo("plain", "no check"),
@@ -72,7 +77,8 @@ test("doneTodos: local checks every time, remote ones when given; errors keep th
 
 	const remote: TodoChecks = {
 		...local,
-		editions: async () => ({ tracked: new Set([7, 8]), picked: new Set([7]) }),
+		// 7 picked, 8 still Hardcover's default, 9 off the shelves, 10 an old item without a baseline, 11 no edition yet
+		editions: async () => new Map<number, number | null>([[7, 72], [8, 81], [10, 100], [11, null]]),
 		shelfIds: async () => new Set(["6"]),
 	};
 	assert.deepEqual([...(await doneTodos(todos, remote))].sort(), ["edition:7", "edition:9", "fields:a", "labels:1", "shelf:5"]);
