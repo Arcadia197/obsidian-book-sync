@@ -257,7 +257,7 @@ export async function planLabels(ctx: PlanContext): Promise<Plan<LabelsPayload>>
 			id,
 			summary: `Add ${source.name} to the Hardcover list "${info.label}"`,
 			details: [],
-			warnings: pending ? [`Needs its list item ticked too (the list isn't in Hardcover Lists.md yet)`] : [],
+			warnings: pending ? [`Needs the list change for "${info.label}" too: ticking this ticks both`] : [],
 			requires: listChanges.some((c) => c.id === `list:${key}`) ? `list:${key}` : undefined,
 			writesHardcover: true,
 			selected: false,

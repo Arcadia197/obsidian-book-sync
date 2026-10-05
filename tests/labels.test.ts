@@ -126,7 +126,7 @@ test("plan: pulls, pushes (one per list and book), owned field, strays, merges, 
 	const ownedPull = byId.get(`pull:${notes.n2}:owned`)!.payload;
 	assert.deepEqual(ownedPull.kind === "pull" && [ownedPull.field, ownedPull.value], ["owned", "Sam"]);
 	assert.match(byId.get("list:essays")!.summary, /existing Hardcover list "Essays" \(13\)/);
-	assert.deepEqual(byId.get("push:poetry:3")!.warnings, ["Needs its list item ticked too (the list isn't in Hardcover Lists.md yet)"]);
+	assert.deepEqual(byId.get("push:poetry:3")!.warnings, ['Needs the list change for "Poetry" too: ticking this ticks both']);
 	const text = plan.notes.join("\n");
 	assert.match(text, /2 mapped label\(s\)\. 1 backlog row\(s\) and 0 note\(s\) skipped \(no hardcover_id\), 1 note\(s\) skipped \(no labels field\)/);
 	assert.match(text, /Row D \(Dan\) \(labels: Sci-Fi\)/);
