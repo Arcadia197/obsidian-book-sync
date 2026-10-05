@@ -118,6 +118,7 @@ export async function applyPush(ctx: WritingApplyContext, changes: Change<PushPa
 	const ids = changes.flatMap((c) => [c.payload.bookId, c.payload.storedId]);
 	const onHardcover = new Set((await ctx.hardcover.finishedInfo(ids)).map((info) => String(info.book_id)));
 	const pushed: PushPayload[] = [];
+	const uncertain: PushPayload[] = [];
 	let failure: string | null = null;
 	for (const change of changes) {
 		const payload = change.payload;
@@ -135,13 +136,15 @@ export async function applyPush(ctx: WritingApplyContext, changes: Change<PushPa
 					pushed.push(payload);
 				}
 			} catch (err) {
-				// A timed-out write may still have landed: the next run's re-check finds it
+				// A timed-out write may still have landed: the next run's re-check finds it. The edition reminder goes on
+				// the list anyway; its check drops it if the book isn't on the shelves after all
 				failure = err instanceof Error ? err.message : String(err);
 				result.skipped.push({ id: change.id, reason: failure });
+				uncertain.push(payload);
 			}
 		}
 	}
-	if (pushed.length) result.todos = pushed.map((p) => ({
+	if (pushed.length || uncertain.length) result.todos = [...pushed, ...uncertain].map((p) => ({
 		key: `edition:${p.bookId}`,
 		text: `${p.name}: pick your edition on Hardcover`,
 		url: p.slug ? hardcoverBookUrl(p.slug) : undefined,

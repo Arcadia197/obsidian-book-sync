@@ -575,6 +575,27 @@ try {
 	check("left for you: an item ticks itself off once the field is filled; an offline remote check keeps its items",
 		stillOpen && !todoKeys().includes("fields:fill-me") && todoKeys().includes("edition:8001"), JSON.stringify(todoKeys()));
 
+	// A renamed note takes its item along; another device's data.json (via Obsidian Sync) is merged, not taken over
+	const RENAMED = "Books/Database/Fay Writer - Renamed.md";
+	await cdp.eval(`await app.vault.adapter.write(${JSON.stringify(DONE_NOTE)}, "---\\nmedium:\\n---\\n");
+		await plugin.addTodos([{ key: "fields:${DONE_NOTE}", text: "Fill Me: fill medium", file: ${JSON.stringify(DONE_NOTE)}, check: { kind: "noteFields", path: ${JSON.stringify(DONE_NOTE)}, fields: ["medium"] } }]);
+		await app.fileManager.renameFile(app.vault.getAbstractFileByPath(${JSON.stringify(DONE_NOTE)}), ${JSON.stringify(RENAMED)});
+		await new Promise((r) => setTimeout(r, 300));`);
+	const renamedTodo = pluginData().todos.find((t) => t.key === `fields:${RENAMED}`);
+	const otherDevice = pluginData();
+	const tickedThere = otherDevice.todos[0].key;
+	otherDevice.todos = otherDevice.todos.slice(1).concat([{ key: "edition:4242", text: "From the phone: pick your edition", stamp: Date.now() }]);
+	otherDevice.todosDone = [...(otherDevice.todosDone ?? []), { key: tickedThere, at: Date.now() }];
+	await cdp.eval(`await plugin.addTodos([{ key: "labels:local-only", text: "Added here meanwhile" }]);
+		await app.vault.adapter.write(".obsidian/plugins/${PLUGIN_ID}/data.json", ${JSON.stringify(JSON.stringify(otherDevice))});
+		await plugin.onExternalSettingsChange();`);
+	const merged = await cdp.eval(`return plugin.todos.map((t) => t.key);`);
+	check("left for you: a renamed note's item follows it; another device's list is merged (its tick and its new item kept, ours too)",
+		renamedTodo?.check?.path === RENAMED && renamedTodo.file === RENAMED
+			&& merged.includes("edition:4242") && merged.includes("labels:local-only") && !merged.includes(tickedThere)
+			&& JSON.stringify(todoKeys()) === JSON.stringify(merged),
+		JSON.stringify({ renamedTodo, merged, tickedThere, saved: todoKeys() }));
+
 	// --- Labels in the review tab: Hardcover cards start unticked, Tick all, a push into a new list ticks the list too
 	hardcoverScenario = writingHardcover;
 	await cdp.eval(`await app.vault.adapter.write(${JSON.stringify(BACKLOG_PATH)}, ${JSON.stringify(WRITING_BACKLOG.replace("| Pushed Book | Ada Writer | 2026-10-02 |  |  |", "| Pushed Book | Ada Writer | 2026-10-02 |  | Drama |"))});

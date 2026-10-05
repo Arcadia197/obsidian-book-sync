@@ -3,7 +3,8 @@
 // it was added here, not a Goodreads date). Refused for a book that already has a row or a Database/ note.
 // Differs from the Python: Labels get an AI suggestion like new rows from the shelf (the Python leaves them blank,
 // which the labels sync then flags), and the row is written by the pull step's apply, so it is sorted and checked
-// for duplicates the same way.
+// for duplicates the same way. "Already archived" reads a note's goodreads_id field (the Python takes the first
+// Goodreads link anywhere in the note); apply re-checks for a duplicate row, not for a note created since the plan.
 
 import type { Change, Plan } from "../core/changes";
 import { parseGoodreadsId } from "../core/idLinks";

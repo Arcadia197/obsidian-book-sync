@@ -46,7 +46,7 @@ test("reconcile: rows whose book has a note are offered for removal, with their 
 	assert.deepEqual(parseTable(vault.files.get(BACKLOG)!, "Title")!.rows.map((r) => r.original), [rows[1], rows[2]]);
 	assert.deepEqual(result.applied, ["remove:1"]);
 	assert.match(result.messages[0], /Goodreads by hand/);
-	assert.deepEqual(result.todos?.map((t) => [t.key, t.text]), [["shelf:1", "Started (Sta): update its status on Goodreads (it's still on your to-read shelf)"]]);
+	assert.deepEqual(result.todos?.map((t) => [t.key, t.text]), [["shelf:1", "Started (Sta): update its status on Goodreads (Book Sync took it off Want to Read)"]]);
 	assert.deepEqual((await applyReconcile(ctx, selectedChanges(plan))).skipped.map((s) => s.id), ["remove:1"], "a second apply finds nothing to remove");
 });
 
@@ -149,6 +149,7 @@ test("promote apply: notes created (labels carried over minus owned), rows remov
 	assert.ok(keys.includes(`fields:${notePath("Reading Now", "Rea")}`), "the new note's blank fields go on the list");
 	assert.ok(keys.includes("shelf:11") && keys.includes("shelf:13"), "removed rows remind to update Goodreads");
 	assert.ok(!keys.includes("shelf:18"), "a book never in the backlog has no shelf reminder");
+	assert.ok(result.todos!.filter((t) => t.key.startsWith("edition:")).every((t) => !t.check), "picking the edition is only half of it: ticked off by hand");
 });
 
 test("promote: an edited Goodreads id is used, an unreadable one leaves it blank; an existing file is never overwritten", async () => {

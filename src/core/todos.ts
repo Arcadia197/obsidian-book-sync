@@ -1,12 +1,13 @@
 // "Left for you": things a sync can't do itself (pick an edition on Hardcover, fill a note's medium, add Labels to a
 // new row, update Goodreads). Steps hand them over in ApplyResult.todos; the plugin keeps them in data.json, so
 // Obsidian Sync shows the same list on every device. One item per key: a newer one replaces the older text but keeps
-// its date. An item goes away when ticked off, or when its check finds it done.
+// its date. An item goes away when ticked off, or when its check finds it done. Removed keys are remembered for a
+// while (tombstones), so a tick on one device also removes the item on another instead of coming back with its list.
 
 import { getList, unquote } from "./frontmatter";
 
 export type TodoCheck =
-	/** Done when none of these frontmatter fields is blank anymore (or the note is gone) */
+	/** Done when none of these frontmatter fields is blank anymore. A missing note keeps the item (renames are followed) */
 	| { kind: "noteFields"; path: string; fields: string[] }
 	/** Done when the backlog row has Labels (or is gone) */
 	| { kind: "rowLabels"; goodreadsId: string }
@@ -15,20 +16,34 @@ export type TodoCheck =
 	/** Done when the book is no longer on the Goodreads shelf of the RSS URL (to-read) */
 	| { kind: "offShelf"; goodreadsId: string };
 
-/** "Still needs by hand" names that aren't to-dos: no frontmatter field, or blank is a valid answer (nobody owns it) */
-const NOT_TODOS = /^(edition\b|owned$)/;
+/**
+ * "Still needs by hand" names that aren't field to-dos: no frontmatter field (edition), blank is a valid answer (owned:
+ * nobody owns it), or Hardcover owns it (rating_10: its own item, rate on Hardcover first)
+ */
+const NOT_FIELD_TODOS = /^(edition\b|owned$|rating_10$)/;
 
-/** The note-fields item for a note's still-needed fields, or none */
-export function noteFieldsTodo(path: string, name: string, stillNeeded: string[]): Todo[] {
-	const fields = stillNeeded.filter((f) => !NOT_TODOS.test(f));
-	return fields.length ? [{ key: `fields:${path}`, text: `${name}: fill ${fields.join(", ")}`, file: path, check: { kind: "noteFields", path, fields } }] : [];
+/** The items for a note's still-needed fields: one for the fields to fill, one to rate the book on Hardcover */
+export function noteFieldsTodo(path: string, name: string, stillNeeded: string[], bookSlug?: string): Todo[] {
+	const fields = stillNeeded.filter((f) => !NOT_FIELD_TODOS.test(f));
+	const todos: Todo[] = fields.length ? [{ key: `fields:${path}`, text: `${name}: fill ${fields.join(", ")}`, file: path, check: { kind: "noteFields", path, fields } }] : [];
+	if (stillNeeded.includes("rating_10")) {
+		// Hardcover wins for ratings: rate it there, then the note gets it (rating x 2) by hand
+		todos.push({
+			key: `rating:${path}`,
+			text: `${name}: rate it on Hardcover, then put the rating (times 2) into rating_10`,
+			file: path,
+			url: bookSlug ? `https://hardcover.app/books/${bookSlug}` : undefined,
+			check: { kind: "noteFields", path, fields: ["rating_10"] },
+		});
+	}
+	return todos;
 }
 
-/** After a backlog row went away because the book was started: Goodreads still has it on the to-read shelf */
+/** After a backlog row went away because the book was started: Goodreads may still have it on the to-read shelf */
 export function offShelfTodo(goodreadsId: string, name: string): Todo {
 	return {
 		key: `shelf:${goodreadsId}`,
-		text: `${name}: update its status on Goodreads (it's still on your to-read shelf)`,
+		text: `${name}: update its status on Goodreads (Book Sync took it off Want to Read)`,
 		url: `https://www.goodreads.com/book/show/${goodreadsId}`,
 		check: { kind: "offShelf", goodreadsId },
 	};
@@ -44,7 +59,62 @@ export interface Todo {
 	url?: string;
 	/** A vault file to do it in */
 	file?: string;
+	/** Without one, only a tick removes the item */
 	check?: TodoCheck;
+	/** When it was last added or updated (ms), to weigh it against a tombstone from another device */
+	stamp?: number;
+}
+
+/** A removed item's key and when it was removed (ms) */
+export interface Tombstone {
+	key: string;
+	at: number;
+}
+
+/** Tombstones kept: enough for months of syncs, small in data.json */
+const MAX_TOMBSTONES = 300;
+
+/** Adds tombstones for `keys`, newest kept */
+export function addTombstones(done: Tombstone[], keys: Iterable<string>, now: number): Tombstone[] {
+	const fresh = [...keys].map((key) => ({ key, at: now }));
+	const merged = new Map<string, number>();
+	for (const t of [...done, ...fresh]) merged.set(t.key, Math.max(merged.get(t.key) ?? 0, t.at));
+	return [...merged].map(([key, at]) => ({ key, at })).sort((a, b) => b.at - a.at).slice(0, MAX_TOMBSTONES);
+}
+
+/**
+ * Two devices' lists as one: every item either has, the newer copy of a key winning, minus items removed (ticked off or
+ * found done) after they were last added. Order: `mine` first, then items only `theirs` has
+ */
+export function mergeDevices(mine: { todos: Todo[]; done: Tombstone[] }, theirs: { todos: Todo[]; done: Tombstone[] }): { todos: Todo[]; done: Tombstone[] } {
+	const done = addTombstones([...mine.done, ...theirs.done], [], 0);
+	const removedAt = new Map(done.map((t) => [t.key, t.at]));
+	const byKey = new Map<string, Todo>();
+	for (const todo of [...mine.todos, ...theirs.todos]) {
+		const known = byKey.get(todo.key);
+		if (!known || (todo.stamp ?? 0) > (known.stamp ?? 0)) byKey.set(todo.key, known ? { ...todo, added: known.added ?? todo.added } : todo);
+	}
+	const todos = [...byKey.values()].filter((todo) => (todo.stamp ?? 0) > (removedAt.get(todo.key) ?? -1));
+	return { todos, done };
+}
+
+export function parseTombstones(raw: unknown): Tombstone[] {
+	return Array.isArray(raw)
+		? raw.filter((t): t is Tombstone => !!t && typeof t === "object" && typeof t.key === "string" && typeof t.at === "number")
+		: [];
+}
+
+/** After a note was renamed or moved: its items follow it */
+export function renameTodoPaths(todos: Todo[], oldPath: string, newPath: string): Todo[] {
+	return todos.map((todo) => {
+		const check = todo.check;
+		const pathCheck = check?.kind === "noteFields" && check.path === oldPath;
+		if (todo.file !== oldPath && !pathCheck) return todo;
+		const moved: Todo = { ...todo, key: todo.key.replace(`:${oldPath}`, `:${newPath}`) };
+		if (todo.file === oldPath) moved.file = newPath;
+		if (pathCheck) moved.check = { ...check, path: newPath };
+		return moved;
+	});
 }
 
 /** `existing` with `incoming` merged in by key: new items appended, known ones updated in place (date kept) */
@@ -53,7 +123,7 @@ export function mergeTodos(existing: Todo[], incoming: Todo[], today: string): T
 	for (const todo of incoming) {
 		const known = merged.findIndex((t) => t.key === todo.key);
 		if (known >= 0) {
-			merged[known] = { ...todo, added: merged[known].added ?? today };
+			merged[known] = { ...todo, added: merged[known].added ?? today, stamp: todo.stamp ?? merged[known].stamp };
 		} else {
 			merged.push({ ...todo, added: todo.added ?? today });
 		}
@@ -76,6 +146,8 @@ export function parseTodos(raw: unknown): Todo[] {
 		if (typeof url === "string") todo.url = url;
 		if (typeof file === "string") todo.file = file;
 		if (isCheck(check)) todo.check = check;
+		const stamp = (item as Record<string, unknown>).stamp;
+		if (typeof stamp === "number") todo.stamp = stamp;
 		todos.push(todo);
 	}
 	return todos;
@@ -126,7 +198,7 @@ export async function doneTodos(todos: Todo[], checks: TodoChecks): Promise<Set<
 		try {
 			if (check?.kind === "noteFields") {
 				const text = await checks.readNote(check.path);
-				if (text === null || !blankFields(text, check.fields).length) done.add(todo.key);
+				if (text !== null && !blankFields(text, check.fields).length) done.add(todo.key);
 			} else if (check?.kind === "rowLabels") {
 				const labels = await checks.rowLabels(check.goodreadsId);
 				if (labels === null || labels.trim()) done.add(todo.key);

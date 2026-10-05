@@ -112,4 +112,5 @@ test("apply: Hardcover's refusal is reported; a network error stops the remainin
 		"not tried after the error above (Hardcover didn't answer in time)",
 	]);
 	assert.deepEqual(result.messages, []);
+	assert.deepEqual(result.todos?.map((t) => t.key), ["edition:51"], "a timed-out insert may have landed: its edition reminder is kept (the check drops it if not)");
 });

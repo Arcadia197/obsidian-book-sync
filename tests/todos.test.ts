@@ -1,6 +1,19 @@
 import { test } from "node:test";
 import { strict as assert } from "node:assert";
-import { blankFields, doneTodos, mergeTodos, noteFieldsTodo, offShelfTodo, parseTodos, Todo, TodoChecks } from "../src/core/todos";
+import {
+	addTombstones,
+	blankFields,
+	doneTodos,
+	mergeDevices,
+	mergeTodos,
+	noteFieldsTodo,
+	offShelfTodo,
+	parseTodos,
+	parseTombstones,
+	renameTodoPaths,
+	Todo,
+	TodoChecks,
+} from "../src/core/todos";
 
 const todo = (key: string, text = key, extra: Partial<Todo> = {}): Todo => ({ key, text, ...extra });
 
@@ -55,14 +68,14 @@ test("doneTodos: local checks every time, remote ones when given; errors keep th
 		readNote: async (path) => notes[path] ?? null,
 		rowLabels: async (id) => (id === "1" ? "Sci-Fi" : id === "2" ? "" : null),
 	};
-	assert.deepEqual([...(await doneTodos(todos, local))].sort(), ["fields:a", "fields:gone", "labels:1"]);
+	assert.deepEqual([...(await doneTodos(todos, local))].sort(), ["fields:a", "labels:1"], "a missing note keeps its item (renames are followed)");
 
 	const remote: TodoChecks = {
 		...local,
 		editions: async () => ({ tracked: new Set([7, 8]), picked: new Set([7]) }),
 		shelfIds: async () => new Set(["6"]),
 	};
-	assert.deepEqual([...(await doneTodos(todos, remote))].sort(), ["edition:7", "edition:9", "fields:a", "fields:gone", "labels:1", "shelf:5"]);
+	assert.deepEqual([...(await doneTodos(todos, remote))].sort(), ["edition:7", "edition:9", "fields:a", "labels:1", "shelf:5"]);
 
 	const offline: TodoChecks = {
 		readNote: async () => {
@@ -87,4 +100,29 @@ test("regression: a blank owned is a valid answer, never a to-do; a cut-off shel
 	const shelf = [todo("shelf:5", "s5", { check: { kind: "offShelf", goodreadsId: "5" } })];
 	const checks: TodoChecks = { readNote: async () => null, rowLabels: async () => null, shelfIds: async () => null };
 	assert.deepEqual([...(await doneTodos(shelf, checks))], [], "a full page of the feed (null) keeps the reminder");
+});
+
+test("rating_10 is Hardcover's: its own item says to rate it there, with the book link", () => {
+	const todos = noteFieldsTodo("DB/A.md", "A", ["medium", "rating_10"], "a-book");
+	assert.deepEqual(todos.map((t) => [t.key, t.text, t.url ?? null]), [
+		["fields:DB/A.md", "A: fill medium", null],
+		["rating:DB/A.md", "A: rate it on Hardcover, then put the rating (times 2) into rating_10", "https://hardcover.app/books/a-book"],
+	]);
+});
+
+test("renameTodoPaths: a renamed note's items follow it, others stay the same objects", () => {
+	const other = todo("edition:1");
+	const moved = renameTodoPaths([todo("fields:DB/Old.md", "x", { file: "DB/Old.md", check: { kind: "noteFields", path: "DB/Old.md", fields: ["medium"] } }), other], "DB/Old.md", "DB/New.md");
+	assert.deepEqual(moved[0], { key: "fields:DB/New.md", text: "x", file: "DB/New.md", check: { kind: "noteFields", path: "DB/New.md", fields: ["medium"] } });
+	assert.equal(moved[1], other);
+});
+
+test("mergeDevices: items from both devices survive, a removal on either side sticks, a newer re-add beats an older removal", () => {
+	const phone = { todos: [todo("a", "a", { stamp: 10 }), todo("b", "b", { stamp: 10 })], done: addTombstones([], ["c"], 30) };
+	const desktop = { todos: [todo("a", "a newer", { stamp: 20 }), todo("c", "c", { stamp: 20 }), todo("d", "d", { stamp: 40 })], done: addTombstones([], ["b", "d"], 35) };
+	const merged = mergeDevices(phone, desktop);
+	assert.deepEqual(merged.todos.map((t) => [t.key, t.text]), [["a", "a newer"], ["d", "d"]], "b removed on desktop, c removed on the phone after it was added; d re-added after its removal");
+	assert.deepEqual(merged.done.map((t) => t.key).sort(), ["b", "c", "d"]);
+	assert.deepEqual(mergeDevices(merged, merged).todos, merged.todos, "merging again changes nothing");
+	assert.deepEqual(parseTombstones([{ key: "x", at: 1 }, { key: 2 }, null]), [{ key: "x", at: 1 }]);
 });

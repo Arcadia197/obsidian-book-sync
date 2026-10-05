@@ -206,7 +206,8 @@ async function suggestGoodreadsId(
 export async function applyPromote(ctx: ApplyContext, changes: Change<PromotePayload>[]): Promise<ApplyResult> {
 	const result = emptyResult();
 	const database = paths(ctx.settings).database;
-	const removals: { id: string; key: RowKey }[] = [];
+	/** Rows to remove once their notes exist; `reminder`: the Goodreads id and name for the shelf reminder */
+	const removals: { id: string; key: RowKey; reminder?: { goodreadsId: string; name: string } }[] = [];
 	for (const change of changes) {
 		const payload = change.payload;
 		if (payload.kind === "create") {
@@ -225,25 +226,29 @@ export async function applyPromote(ctx: ApplyContext, changes: Change<PromotePay
 				result.skipped.push({ id: change.id, reason: `${built.filename} already exists, not overwritten` });
 				continue;
 			}
-			await ctx.vault.create(path, built.text);
+			try {
+				await ctx.vault.create(path, built.text);
+			} catch (err) {
+				// One unwritable note (a filename the device refuses) doesn't lose the rest of the run's results
+				result.skipped.push({ id: change.id, reason: `couldn't create ${built.filename}: ${(err as Error).message}` });
+				continue;
+			}
 			result.applied.push(change.id);
 			result.messages.push(`Created ${built.filename}. Still needs by hand: ${built.stillNeeded.join(", ")}`);
 			const name = built.filename.replace(/\.md$/, "");
 			const todos = (result.todos ??= []);
-			todos.push(...noteFieldsTodo(path, name, built.stillNeeded));
+			todos.push(...noteFieldsTodo(path, name, built.stillNeeded, payload.entry.book.slug));
 			if (built.noEdition) {
+				// No check: picking the edition is only half of it, the note still shows the default edition's data
 				todos.push({
 					key: `edition:${payload.entry.book_id}`,
-					text: `${name}: pick your edition on Hardcover, then check the note against it`,
+					text: `${name}: pick your edition on Hardcover, then check the note against it (title, isbn, cover, pages, language)`,
 					url: `https://hardcover.app/books/${payload.entry.book.slug}`,
-					check: { kind: "edition", bookId: payload.entry.book_id },
+					file: path,
 				});
 			}
-			if (payload.row && backlog.goodreadsId) {
-				todos.push(offShelfTodo(backlog.goodreadsId, name));
-			}
 			if (payload.row) {
-				removals.push({ id: change.id, key: payload.row });
+				removals.push({ id: change.id, key: payload.row, reminder: backlog.goodreadsId ? { goodreadsId: backlog.goodreadsId, name } : undefined });
 			}
 		} else if (payload.kind === "merge") {
 			const reason = await applyMerge(ctx.vault, payload);
@@ -270,6 +275,8 @@ export async function applyPromote(ctx: ApplyContext, changes: Change<PromotePay
 			}
 		} else if (!found[i]) {
 			result.messages.push(`The backlog row for ${change.id} was already gone.`);
+		} else if (removal.reminder) {
+			(result.todos ??= []).push(offShelfTodo(removal.reminder.goodreadsId, removal.reminder.name));
 		}
 	});
 	if (found.some(Boolean)) {

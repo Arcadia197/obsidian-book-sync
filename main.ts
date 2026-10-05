@@ -1,7 +1,18 @@
 import { Platform, Plugin, WorkspaceLeaf } from "obsidian";
 import { Clients, createClients, Endpoints } from "./src/api/clients";
 import { ApplyResult, Change, Plan, selectedChanges, StepId } from "./src/core/changes";
-import { doneTodos, mergeTodos, parseTodos, Todo, TodoChecks } from "./src/core/todos";
+import {
+	addTombstones,
+	doneTodos,
+	mergeDevices,
+	mergeTodos,
+	parseTodos,
+	parseTombstones,
+	renameTodoPaths,
+	Todo,
+	TodoChecks,
+	Tombstone,
+} from "./src/core/todos";
 import { obsidianHttp } from "./src/obsidianHttp";
 import { obsidianVault } from "./src/obsidianVault";
 import { FULL_SYNC, PHASES } from "./src/run/stepInfo";
@@ -20,6 +31,8 @@ export default class BookSyncPlugin extends Plugin {
 	endpoints?: Endpoints;
 	/** "Left for you", kept in data.json next to the settings so every synced device shows the same list */
 	todos: Todo[] = [];
+	/** Keys of removed items, so a removal reaches the other devices instead of the item coming back from them */
+	private todosDone: Tombstone[] = [];
 	private statusEl: HTMLElement | null = null;
 	/** When Hardcover and Goodreads were last asked whether items are done (local checks run every time) */
 	private lastRemoteCheck = 0;
@@ -28,10 +41,21 @@ export default class BookSyncPlugin extends Plugin {
 		const saved = await this.loadData();
 		this.settings = mergeSettings(saved);
 		this.todos = parseTodos(saved?.todos);
+		this.todosDone = parseTombstones(saved?.todosDone);
 		if (migrateSecretNames(saved, this.settings, (name) => this.app.secretStorage?.getSecret(name) ?? null)) {
 			await this.saveSettings();
 		}
 		this.addSettingTab(new SettingsTab(this.app, this));
+		// A renamed or moved note takes its "Left for you" items along
+		this.registerEvent(
+			this.app.vault.on("rename", (file, oldPath) => {
+				const renamed = renameTodoPaths(this.todos, oldPath, file.path);
+				if (renamed.some((todo, i) => todo !== this.todos[i])) {
+					this.todos = renamed;
+					void this.saveSettings().then(() => this.refreshViews());
+				}
+			}),
+		);
 
 		this.registerView(VIEW_TYPE, (leaf) => new BookSyncView(leaf, this));
 		this.registerHoverLinkSource(VIEW_TYPE, { display: "Book Sync", defaultMod: false });
@@ -52,14 +76,24 @@ export default class BookSyncPlugin extends Plugin {
 	}
 
 	async saveSettings() {
-		await this.saveData({ ...this.settings, todos: this.todos });
+		await this.saveData({ ...this.settings, todos: this.todos, todosDone: this.todosDone });
 	}
 
-	/** data.json changed on disk (Obsidian Sync brought another device's edits): take its settings and list */
+	/**
+	 * data.json changed on disk (Obsidian Sync brought another device's edits): take its settings, and merge the lists
+	 * by key, so items added here meanwhile survive and removals on either side stick
+	 */
 	async onExternalSettingsChange() {
 		const saved = await this.loadData();
 		this.settings = mergeSettings(saved);
-		this.todos = parseTodos(saved?.todos);
+		const theirs = { todos: parseTodos(saved?.todos), done: parseTombstones(saved?.todosDone) };
+		const merged = mergeDevices({ todos: this.todos, done: this.todosDone }, theirs);
+		this.todos = merged.todos;
+		this.todosDone = merged.done;
+		const changed = JSON.stringify(merged.todos) !== JSON.stringify(theirs.todos) || merged.done.length !== theirs.done.length;
+		if (changed) {
+			await this.saveSettings();
+		}
 		this.refreshViews();
 	}
 
@@ -68,7 +102,8 @@ export default class BookSyncPlugin extends Plugin {
 		if (!items.length) {
 			return;
 		}
-		this.todos = mergeTodos(this.todos, items, localDate());
+		const now = Date.now();
+		this.todos = mergeTodos(this.todos, items.map((item) => ({ ...item, stamp: now })), localDate());
 		await this.saveSettings();
 		this.refreshViews();
 	}
@@ -76,6 +111,7 @@ export default class BookSyncPlugin extends Plugin {
 	/** Ticks an item off by hand */
 	async removeTodo(key: string): Promise<void> {
 		this.todos = this.todos.filter((t) => t.key !== key);
+		this.todosDone = addTombstones(this.todosDone, [key], Date.now());
 		await this.saveSettings();
 		this.refreshViews();
 	}
@@ -103,7 +139,18 @@ export default class BookSyncPlugin extends Plugin {
 		if (remote && Date.now() - this.lastRemoteCheck > 10 * 60 * 1000) {
 			this.lastRemoteCheck = Date.now();
 			const clients = this.clients();
-			if (this.settings.hardcoverToken) checks.editions = (ids) => clients.hardcover.shelfEditions(ids);
+			if (this.settings.hardcoverToken) {
+				// A book Hardcover merged meanwhile sits on the shelves under the winning id: ask for that one
+				checks.editions = async (ids) => {
+					const merges = await clients.hardcover.resolveMerges(ids);
+					const current = (id: number) => merges.get(String(id))?.id ?? id;
+					const found = await clients.hardcover.shelfEditions(ids.map(current));
+					return {
+						tracked: new Set(ids.filter((id) => found.tracked.has(current(id)))),
+						picked: new Set(ids.filter((id) => found.picked.has(current(id)))),
+					};
+				};
+			}
 			if (this.settings.goodreadsRssUrl) {
 				checks.shelfIds = async () => {
 					const shelf = await clients.goodreads.fetchShelf(this.settings.goodreadsRssUrl);
@@ -115,6 +162,7 @@ export default class BookSyncPlugin extends Plugin {
 		const done = await doneTodos(this.todos, checks);
 		if (done.size) {
 			this.todos = this.todos.filter((t) => !done.has(t.key));
+			this.todosDone = addTombstones(this.todosDone, done, Date.now());
 			await this.saveSettings();
 			this.refreshViews();
 		}
