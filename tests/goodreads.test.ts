@@ -52,6 +52,16 @@ test("fetchShelf: GET of the RSS URL from the settings", async () => {
 	assert.equal(fake.requests[0].method, "GET");
 });
 
+test("fetchShelf: to-read unless another shelf is asked for, whatever shelf the URL names", async () => {
+	const fake = fakeHttp(...Array.from({ length: 3 }, () => textResponse(fixture("goodreads-shelf.xml"))));
+	const client = new GoodreadsClient({ http: fake.http, clock: fakeClock() });
+	const base = "https://www.goodreads.com/review/list_rss/1000?key=SECRETKEY&shelf=";
+	await client.fetchShelf(base);
+	await client.fetchShelf(`${base}read`);
+	await client.fetchShelf(base, "currently-reading");
+	assert.deepEqual(fake.requests.map((r) => r.url), [`${base}to-read`, `${base}to-read`, `${base}currently-reading`]);
+});
+
 test("fetchShelf: errors never contain the RSS URL or its key", async () => {
 	const fake = fakeHttp(textResponse(`Not found: ${RSS_URL}`, 404), textResponse(`<html>${RSS_URL}</html>`));
 	const client = new GoodreadsClient({ http: fake.http, clock: fakeClock() });

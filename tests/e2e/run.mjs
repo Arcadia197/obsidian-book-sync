@@ -131,6 +131,8 @@ const HARDCOVER = JSON.parse(fixture("hardcover.json"));
 // Answers in order per route; "hardcover" answers are names from tests/fixtures/hardcover.json
 const queue = { hardcover: [], openai: [] };
 const RSS_PATH = "/review/list_rss/1000?key=E2EKEY&shelf=to-read";
+// What goes into the settings: the base with an empty shelf=, the plugin adds the shelf
+const RSS_BASE = "/review/list_rss/1000?key=E2EKEY&shelf=";
 
 let cdp;
 let fake;
@@ -270,7 +272,7 @@ try {
 		/^mutation InsertListBook/.test(mutation.query) && mutation.variables.object.list_id === 7001, JSON.stringify(mutation));
 
 	const shelf = await cdp.eval(`
-		plugin.settings.goodreadsRssUrl = ${JSON.stringify(fake.url + RSS_PATH)};
+		plugin.settings.goodreadsRssUrl = ${JSON.stringify(fake.url + RSS_BASE)};
 		return await plugin.clients(${endpoints}).goodreads.fetchShelf(plugin.settings.goodreadsRssUrl);`);
 	check("the Goodreads RSS shelf is fetched and parsed",
 		shelf.length === 4 && shelf[2].title === `L'âme du "monde" & été` && shelf[0].dateAdded === "2026-10-04", JSON.stringify(shelf));
@@ -299,7 +301,7 @@ try {
 
 	// --- Pipeline steps: plan() reads only, apply() writes only ticked changes, in the test vault
 	hardcoverScenario = stepsHardcover;
-	await cdp.eval(`plugin.settings.booksFolder = "Books"; plugin.settings.goodreadsRssUrl = ${JSON.stringify(fake.url + RSS_PATH)};`);
+	await cdp.eval(`plugin.settings.booksFolder = "Books"; plugin.settings.goodreadsRssUrl = ${JSON.stringify(fake.url + RSS_BASE)};`);
 	const planStep = (id) => cdp.eval(`window.__plan = await plugin.planStep(${JSON.stringify(id)}, ${endpoints}); return window.__plan;`);
 	const applyStep = (select = "") => cdp.eval(`${select}; return await plugin.applyStep(window.__plan, ${endpoints});`);
 	const backlog = () => readVaultFile(BACKLOG_PATH);
@@ -671,7 +673,7 @@ try {
 	check("settings: each key's Test button reports whether it works",
 		settingsUi.results["Hardcover API token"] === "The token works: signed in as e2e-reader."
 			&& settingsUi.results["OpenAI API key"] === "The key works."
-			&& settingsUi.results["Goodreads RSS URL"] === "The feed works: 4 books on the shelf.",
+			&& settingsUi.results["Goodreads RSS URL"] === "The feed works: 4 books on your to-read shelf.",
 		JSON.stringify(settingsUi.results));
 
 	const suggest = await cdp.eval(`

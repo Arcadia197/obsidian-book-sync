@@ -78,9 +78,9 @@ export class SettingsTab extends PluginSettingTab {
 			return `The token works: signed in as ${name}.`;
 		});
 		this.key("openaiKey", "OpenAI API key", "For label suggestions.", () => this.plugin.clients().openai.checkKey());
-		this.key("goodreadsRssUrl", "Goodreads RSS URL", "The to-read shelf's RSS link. It contains a private key.", async () => {
+		this.key("goodreadsRssUrl", "Goodreads RSS URL", "The RSS link of any of your shelves, or its base ending in \"shelf=\": the plugin picks the shelf itself (to-read). It contains a private key.", async () => {
 			const shelf = await this.plugin.clients().goodreads.fetchShelf(this.plugin.settings.goodreadsRssUrl);
-			return `The feed works: ${shelf.length} book${shelf.length === 1 ? "" : "s"} on the shelf.`;
+			return `The feed works: ${shelf.length} book${shelf.length === 1 ? "" : "s"} on your to-read shelf.`;
 		});
 	}
 

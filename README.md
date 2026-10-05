@@ -34,7 +34,7 @@ Works on desktop and on phones (the review uses a compact layout with large tap 
 | Key | Where to get it | Needed for |
 |-----|-----------------|------------|
 | Hardcover API token | hardcover.app → Settings → API | Everything that reads or writes Hardcover |
-| Goodreads RSS URL | Your Goodreads "to-read" shelf → RSS link at the bottom | Pulling the shelf (the URL contains a private key) |
+| Goodreads RSS URL | The RSS link at the bottom of any of your Goodreads shelves; the plugin picks the shelf itself (to-read), so the part after `shelf=` doesn't matter and may be empty | Pulling the shelf (the URL contains a private key) |
 | OpenAI API key | platform.openai.com | Label suggestions (optional) |
 
 Keys are saved in the plugin's `data.json` inside your vault, so they sync to your other devices along with the vault. Don't share that file.

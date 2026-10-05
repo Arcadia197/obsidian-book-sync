@@ -14,7 +14,7 @@ import { parseGoodreadsId } from "../core/idLinks";
 import { BacklogInfo, buildNote, BuiltNote, chooseAuthor, chooseTitle } from "../core/noteBuilder";
 import type { HardcoverUserBook } from "../core/hardcoverTypes";
 import { titleKey } from "../core/titleMatch";
-import { ShelfEntry, shelfUrl } from "../api/goodreads";
+import type { ShelfEntry } from "../api/goodreads";
 import { ApplyContext, describeRow, loadBacklog, loadNotes, NoteFile, paths, PlanContext, rowGoodreadsId, rowHardcoverId, RowKey, rowKey, Step } from "./context";
 import { applyMerge, mergeChange, MergePayload } from "./merges";
 import { GOODREADS_REMINDER, notesWarning, removeRows } from "./reconcile";
@@ -187,7 +187,7 @@ async function suggestGoodreadsId(
 ): Promise<{ id: string | null; warning: string }> {
 	if (!cache.has(shelf)) {
 		try {
-			cache.set(shelf, ctx.settings.goodreadsRssUrl ? await ctx.goodreads.fetchShelf(shelfUrl(ctx.settings.goodreadsRssUrl, shelf)) : new Error("no Goodreads RSS URL set"));
+			cache.set(shelf, ctx.settings.goodreadsRssUrl ? await ctx.goodreads.fetchShelf(ctx.settings.goodreadsRssUrl, shelf) : new Error("no Goodreads RSS URL set"));
 		} catch (err) {
 			cache.set(shelf, err as Error);
 		}

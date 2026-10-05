@@ -88,8 +88,8 @@ function promoteSetup() {
 			},
 		},
 		goodreads: {
-			fetchShelf: async (url) => {
-				asked.push(url);
+			fetchShelf: async (url, shelf) => {
+				asked.push(shelfUrl(url, shelf ?? "to-read"));
 				return [{ goodreadsId: "18", title: "Never Listed (Book 1)", author: "Nev", dateAdded: "2026-01-01", isbn: "" }];
 			},
 		},
@@ -188,9 +188,11 @@ test("promote: a shelf that can't be read is a warning on the item, not a failed
 	assert.match(uncovered.warnings.join("\n"), /Couldn't read your Goodreads "read" shelf \(HTTP 500\)/);
 });
 
-test("shelfUrl: swaps the shelf parameter, or adds one", () => {
+test("shelfUrl: sets an empty shelf parameter, swaps one, or adds one", () => {
 	assert.equal(shelfUrl(SETTINGS.goodreadsRssUrl, "currently-reading"), "https://feeds.example/review/list_rss/1?key=KEY&shelf=currently-reading");
 	assert.equal(shelfUrl("https://feeds.example/list?shelf=to-read&key=K", "read"), "https://feeds.example/list?shelf=read&key=K");
 	assert.equal(shelfUrl("https://feeds.example/list?key=K", "read"), "https://feeds.example/list?key=K&shelf=read");
+	// The base URL as the Python's .env keeps it: an empty shelf= (which Goodreads answers with every shelf)
+	assert.equal(shelfUrl("https://feeds.example/list?key=K&shelf=", "to-read"), "https://feeds.example/list?key=K&shelf=to-read");
 	assert.equal(DB, "Books/Database");
 });

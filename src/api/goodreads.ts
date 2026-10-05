@@ -125,7 +125,7 @@ export function parseBookPage(html: string): BookPage | null {
 	};
 }
 
-/** The RSS URL for another shelf of the same account ("read", "currently-reading"): its `shelf=` parameter swapped */
+/** The RSS URL for a shelf of the same account ("to-read", "read"...): its `shelf=` parameter set, swapped or added */
 export function shelfUrl(rssUrl: string, shelf: string): string {
 	const url = rssUrl.trim();
 	const param = /([?&])shelf=[^&#]*/;
@@ -146,12 +146,15 @@ export class GoodreadsClient {
 		this.bookUrl = options.bookUrl ?? goodreadsBookUrl;
 	}
 
-	/** The shelf behind the RSS URL from the settings (it names the shelf, normally to-read) */
-	async fetchShelf(rssUrl: string): Promise<ShelfEntry[]> {
+	/**
+	 * One shelf of the account behind the RSS URL from the settings. The URL may name any shelf or none (the base
+	 * ending in `shelf=`): the shelf asked for here replaces it, since an empty `shelf=` returns every shelf
+	 */
+	async fetchShelf(rssUrl: string, shelf = "to-read"): Promise<ShelfEntry[]> {
 		if (!rssUrl.trim()) {
 			throw new ApiError("No Goodreads RSS URL set. Add it in the plugin settings.");
 		}
-		const response = await withTimeout(this.options.http({ url: rssUrl.trim(), method: "GET" }), this.timeoutMs, "Goodreads");
+		const response = await withTimeout(this.options.http({ url: shelfUrl(rssUrl, shelf), method: "GET" }), this.timeoutMs, "Goodreads");
 		if (response.status !== 200) {
 			// No URL and no body in the message: both can carry the private key
 			throw new ApiError(`Goodreads answered HTTP ${response.status} for the RSS feed. Check the RSS URL in the plugin settings.`, response.status);
