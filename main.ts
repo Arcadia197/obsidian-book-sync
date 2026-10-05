@@ -47,6 +47,7 @@ export default class BookSyncPlugin extends Plugin {
 			this.statusEl = this.addStatusBarItem();
 			this.statusEl.addClass("book-sync-status", "mod-clickable");
 			this.statusEl.addEventListener("click", () => this.openView());
+			this.app.workspace.onLayoutReady(() => this.setRestingStatus());
 		}
 	}
 
@@ -69,12 +70,14 @@ export default class BookSyncPlugin extends Plugin {
 		}
 		this.todos = mergeTodos(this.todos, items, localDate());
 		await this.saveSettings();
+		this.refreshViews();
 	}
 
 	/** Ticks an item off by hand */
 	async removeTodo(key: string): Promise<void> {
 		this.todos = this.todos.filter((t) => t.key !== key);
 		await this.saveSettings();
+		this.refreshViews();
 	}
 
 	/**
@@ -113,14 +116,16 @@ export default class BookSyncPlugin extends Plugin {
 		if (done.size) {
 			this.todos = this.todos.filter((t) => !done.has(t.key));
 			await this.saveSettings();
+			this.refreshViews();
 		}
 		return done.size;
 	}
 
+	/** Redraws the Book Sync tab (it also sets the status bar), or just the status bar without one */
 	private refreshViews(): void {
-		for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
-			if (leaf.view instanceof BookSyncView) leaf.view.refresh();
-		}
+		const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE).filter((leaf) => leaf.view instanceof BookSyncView);
+		leaves.forEach((leaf) => (leaf.view as BookSyncView).refresh());
+		if (!leaves.length) this.setRestingStatus();
 	}
 
 	/** Fresh API clients with the current keys; `endpoints` is for the e2e test's fake servers */
@@ -190,5 +195,10 @@ export default class BookSyncPlugin extends Plugin {
 	/** Desktop status bar: where a running sync is */
 	setStatus(text: string): void {
 		this.statusEl?.setText(text);
+	}
+
+	/** Desktop status bar when no sync is running: how many items are left for you */
+	setRestingStatus(): void {
+		this.setStatus(this.todos.length ? `Book Sync: ${this.todos.length} left for you` : "");
 	}
 }

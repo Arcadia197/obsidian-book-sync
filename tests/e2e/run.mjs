@@ -509,7 +509,7 @@ try {
 	const closed = await cdp.eval(`return { leaves: app.workspace.getLeavesOfType("julius-personal-book-sync-view").length, plans: window.__plans,
 		applies: window.__applies, status: document.querySelector(".book-sync-status")?.textContent };`);
 	check("view: closing the tab while a step plans ends the run: nothing more planned or written",
-		closed.leaves === 0 && closed.plans === 3 && closed.applies === 2 && closed.status === "" && backlog() === beforeClose
+		closed.leaves === 0 && closed.plans === 3 && closed.applies === 2 && !/Push|Link|Pull/.test(closed.status) && backlog() === beforeClose
 			&& hardcoverMutations.length === 0,
 		JSON.stringify(closed));
 

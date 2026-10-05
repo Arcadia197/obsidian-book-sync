@@ -87,7 +87,7 @@ export class BookSyncView extends ItemView {
 		// Closing the tab halfway ends the run: nothing after this is planned or written
 		this.session?.end();
 		this.session = null;
-		this.plugin.setStatus("");
+		this.plugin.setRestingStatus();
 	}
 
 	/** The "Add to Want to Read" command: the start page with the add field focused */
@@ -224,8 +224,7 @@ export class BookSyncView extends ItemView {
 	private updateStatus(): void {
 		const session = this.session;
 		if (!session) {
-			const left = this.plugin.todos.length;
-			this.plugin.setStatus(left ? `Book Sync: ${left} left for you` : "");
+			this.plugin.setRestingStatus();
 			return;
 		}
 		if (session.finished) {
