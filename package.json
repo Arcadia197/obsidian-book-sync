@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-book-sync",
-	"version": "0.0.1",
+	"version": "0.1.0",
 	"description": "Keeps a Goodreads to-read shelf, a markdown backlog, Hardcover and book notes in step, with a review window before every write.",
 	"main": "main.js",
 	"scripts": {
